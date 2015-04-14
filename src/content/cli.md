@@ -1,7 +1,7 @@
 ---
 word: API
-title: Command Line Reference
-order: 7
+title: Command Line
+order: 13
 ---
 
 Spark CLI
@@ -12,7 +12,7 @@ The Spark CLI is a powerful tool for interacting with your cores and the Spark C
 Installing
 =======
 
-  First, make sure you have [node.js](http://nodejs.org/) installed!  
+  First, make sure you have [node.js](http://nodejs.org/) installed!
 
   Next, open a command prompt or terminal, and install by typing:
 
@@ -25,11 +25,13 @@ $ spark cloud login
 Advanced Install
 ---------------------------
 
-To use the local flash and key features you'll also need to install [dfu-util](http://dfu-util.gnumonks.org/), and [openssl](http://www.openssl.org/).  They are freely available and open-source, and there are installers and binaries for most major platforms.
+To use the local flash and key features you'll also need to install [dfu-util](http://dfu-util.sourceforge.net/), and [openssl](http://www.openssl.org/).  They are freely available and open-source, and there are installers and binaries for most major platforms.
 
 Here are some great tutorials on the community for full installs:
 
-[Installing on Ubuntu](https://community.spark.io/t/how-to-install-spark-cli-on-ubuntu-12-04/3474)
+[Installing on Ubuntu 12.04](https://community.spark.io/t/how-to-install-spark-cli-on-ubuntu-12-04/3474)
+
+[Installing on Ubuntu 14.04](https://community.spark.io/t/how-to-install-the-spark-toolchain-in-ubuntu-14-04/4139)
 
 [Installing on Windows](https://community.spark.io/t/tutorial-spark-cli-on-windows-06-may-2014/3112)
 
@@ -79,11 +81,11 @@ $ spark setup
 ###spark help
 
   Shows you what commands are available and how to use them.  You can also give the name of a command for detailed help.
-  
+
 ```sh
 # how to get help
 $ spark help
-$ spark help keys 
+$ spark help keys
 ```
 
 
@@ -91,7 +93,7 @@ $ spark help keys
 Blink an LED with Tinker
 ============
 
-If you're just opening a new core, chances are it's already loaded with Tinker, the app we load at the factory.  If you don't have Tinker, or if you've been using the build IDE already, lets load it quickly by typing:
+If you're just opening a new core, chances are it's already loaded with Tinker, the app we load at the factory.  If you don't have Tinker, or if you've been using the build IDE already, let's load it quickly by typing:
 
 ```sh
 # How to re-load tinker onto a core
@@ -103,7 +105,7 @@ flash core said  {"id":"0123456789ABCDEFGHI","status":"Update started"}
 ```
 
 
-Lets make sure your core is online and loaded with Tinker.  We should see the four characteristic functions exposed by Tinker, "digitalwrite", "digitalread", "analogwrite", and "analogread".
+Let's make sure your core is online and loaded with Tinker.  We should see the four characteristic functions exposed by Tinker, "digitalwrite", "digitalread", "analogwrite", and "analogread".
 
 ```sh
 # how to show all your cores and their functions and variables
@@ -113,14 +115,14 @@ Checking with the cloud...
 Retrieving cores... (this might take a few seconds)
 my_core_name (0123456789ABCDEFGHI) 0 variables, and 4 functions
   Functions:
-    int digitalread(String args) 
-    int digitalwrite(String args) 
-    int analogread(String args) 
-    int analogwrite(String args) 
+    int digitalread(String args)
+    int digitalwrite(String args)
+    int analogread(String args)
+    int analogwrite(String args)
 
 ```
 
-Lets try turning on the LED attached to pin D7 on your core.
+Let's try turning on the LED attached to pin D7 on your core.
 
 ```sh
 # how to call a function on your core
@@ -137,7 +139,7 @@ Nice!  You should have seen the small blue LED turn on, and then off.
 Update your core remotely
 =========================
 
-You can write whole apps and flash them remotely from the command line just as you would from the build IDE.  Lets write a small blink sketch to try it out.
+You can write whole apps and flash them remotely from the command line just as you would from the build IDE.  Let's write a small blink sketch to try it out.
 
 Copy and paste the following program into a file called blinky.ino
 
@@ -163,7 +165,7 @@ void loop() {
 ```
 
 
-Then lets compile that program to make sure it's valid code.  The CLI will automatically download the compiled binary of your program if everything went well, and show you the url.  The server will also keep a copy of your binary around for you for about 24 hours.
+Then let's compile that program to make sure it's valid code.  The CLI will automatically download the compiled binary of your program if everything went well, and show you the url.  The server will also keep a copy of your binary around for you for about 24 hours.
 
 
 ```sh
@@ -179,7 +181,7 @@ Compiled firmware downloaded.
 ```
 
 
-Now that we have a valid program, lets flash it to our core!  We can use either the source code again, or we can send our binary.
+Now that we have a valid program, let's flash it to our core!  We can use either the source code again, or we can send our binary.
 
 ```sh
 # how to flash a program to your core (from source code)
@@ -249,7 +251,7 @@ my_core_name (0123456789ABCDEFGHI) 0 variables, and 4 functions
 
 ```
 
-###spark core add
+###spark cloud claim
 
   Adds a new core to your account
 
@@ -278,7 +280,7 @@ $ spark core rename 0123456789ABCDEFGHI "pirate frosting"
 
 ```sh
 # how to remove a core from your account
-$ node app.js core remove 0123456789ABCDEFGHI
+$ spark core remove 0123456789ABCDEFGHI
 Are you sure?  Please Type yes to continue: yes
 releasing core 0123456789ABCDEFGHI
 server said  { ok: true }
@@ -317,8 +319,8 @@ $ spark flash 0123456789ABCDEFGHI cc3000
 
 # how to flash if your core is blinking yellow and connected over usb
 # requires dfu-util
-$ spark flash 0123456789ABCDEFGHI tinker --usb
-$ spark flash 0123456789ABCDEFGHI cc3000 --usb
+$ spark flash --usb tinker
+$ spark flash --usb cc3000
 ```
 
 
@@ -413,7 +415,7 @@ $ spark get 0123456789ABCDEFGHI temperature
 ###spark monitor
 
   Pulls the value of a variable at a set interval, and optionally display a timestamp
-  
+
   * Minimum delay for now is 500 (there is a check anyway if you keyed anything less)
   * hitting ```CTRL + C``` in the console will exit the monitoring
 
@@ -564,4 +566,3 @@ Coming Soon - more commands to make it easier to change the server settings on y
 $ spark keys server my_server.der
 Okay!  New keys in place, your core will not restart.
 ```
-

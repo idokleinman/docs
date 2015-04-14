@@ -1,6 +1,6 @@
 ---
 word: API
-title: Cloud API reference
+title: Cloud code (API)
 order: 4
 ---
 
@@ -27,11 +27,49 @@ https://api.spark.io
 
 There are a number of API calls available, which are summarized here, and described in more detail below.
 
+List devices
+-------
+
 List devices the currently authenticated user has access to.
 
 ```
 GET /v1/devices
+
+# A typical JSON response will look like this
+[
+  {
+    "id": "53ff6f0650723",
+    "name": "plumber_laser",
+    "last_app": null,
+    "last_heard": null,
+    "connected": false
+  },
+  {
+    "id": "53ff291839887",
+    "name": "spark_love",
+    "last_app": null,
+    "last_heard": 2014-12-15T20:12:51.974Z,
+    "connected": true
+  }
+]
 ```
+
+Claim core
+-------
+
+You can claim a brand new or released core through a simple API call. All you need as an access token and core id!
+
+```
+POST /v1/devices
+
+# EXAMPLE REQUEST
+curl https://api.spark.io/v1/devices \
+     -d access_token=1234 \
+     -d id=0123456789abcdef01234567
+```
+
+Device information
+-------
 
 Get basic information about the given Core, including the custom variables and functions it has exposed.
 
@@ -45,12 +83,18 @@ Update the Core, including the display name or the firmware (either binary or so
 PUT /v1/devices/{DEVICE_ID}
 ```
 
+Requesting a variable value
+-------
+
 Request the current value of a variable exposed by the core,
 e.g., `GET /v1/devices/0123456789abcdef01234567/temperature`
 
 ```
 GET /v1/devices/{DEVICE_ID}/{VARIABLE}
 ```
+
+Calling a function
+-------
 
 Call a function exposed by the core, with arguments passed in request body,
 e.g., `POST /v1/devices/0123456789abcdef01234567/brew`
@@ -183,6 +227,61 @@ In the POST body, you need three parameters:
 For now, Spark Build will list the single most recently created token.
 
 
+### Configure when your token expires
+
+You can control when your access token will expire, or set it to not expire at all!  
+There are two ways to specify how / when your token should expire.
+
+
+####expires_in - Optional
+
+How many seconds should the token last for?  Setting this to 0 seconds will create a token that never expires.
+
+It's generally a little safer to create short lived tokens and refresh them frequently, since it makes it harder to lose a token that has access to your devices.
+
+```
+# expires in 3600 seconds, or 1 hour
+"expires_in": 3600
+```
+
+```
+# Setting token lifespan using expires_in with curl in your terminal
+curl https://api.spark.io/oauth/token -u spark:spark \
+     -d grant_type=password \
+     -d username=joe@example.com \
+     -d password=SuperSecret \
+     -d expires_in=3600
+```
+
+ 
+```
+ 
+```
+
+####expires_at - Optional
+
+At what date and time should the token expire?  This should be an ISO8601 style date string, or null for never
+
+
+```
+# date format: YYYY-MM-DD
+# expires in 2020
+"expires_at": "2020-01-01"
+```
+
+```
+# Setting token lifespan using a date string with curl in your terminal
+curl https://api.spark.io/oauth/token -u spark:spark \
+     -d grant_type=password \
+     -d username=joe@example.com \
+     -d password=SuperSecret \
+     -d expires_at=2020-01-01
+```
+
+
+
+
+
 ### List all your tokens
 
 ```
@@ -272,7 +371,9 @@ Controlling a Core
 --------
 
 To control a Core, you must first define and expose *functions* in the Core firmware.
-You then call these functions remotely using the Spark Cloud API.
+You then call these functions remotely using the Spark Cloud API. 
+
+Note: If you have declared a function name longer than 12 characters it *will be truncated* to 12 characters. Example: Spark.function("someFunction1", ...); exposes a function called **someFunction** and *not* **someFunction1**
 
 ```cpp
 /* FIRMWARE */
@@ -337,6 +438,7 @@ The API request will be routed to the Spark Core and will run your `brew` functi
 ```
 
 All Spark functions take a String as the only argument and must return a 32-bit integer.
+The maximum length of the argument is 63 characters.
 
 
 Reading data from a Core
@@ -374,6 +476,22 @@ The API endpoint is `/v1/devices/{DEVICE_ID}/{VARIABLE}` and as always, you have
 # Your access token is 1234123412341234123412341234123412341234
 curl "https://api.spark.io/v1/devices/0123456789abcdef01234567/temperature?access_token=1234123412341234123412341234123412341234"
 ```
+And the response contains a `result` like this:
+
+```json
+// EXAMPLE RESPONSE
+{
+  "cmd": "VarReturn",
+  "name": "temperature",
+  "result": 42,
+  "coreInfo": {
+    "last_app": "",
+    "last_heard": "2014-08-22T22:33:25.407Z",
+    "connected": true,
+    "deviceID": "53ff6c065075535119511687"
+  }
+
+```
 
 **NOTE**: Variable names are truncated after the 12th character: `temperature_sensor` is accessible as `temperature_`
 
@@ -395,7 +513,10 @@ at which point you will be immediately notified.
 
 To subscribe to an event stream, make a GET request to one of the following endpoints.
 This will open a Server-Sent Events (SSE) stream, i.e., a TCP socket that stays open.
-In each case, the event name filter in the URI is optional.
+In each case, the event name filter in the URI is optional.  When specifying an event name filter,
+published events will be limited to those events with names that begin with the specified string.
+For example, specifying an event name filter of 'temp' will return events with names 'temp' and 
+'temperature'. 
 
 SSE resources:
 
@@ -440,6 +561,30 @@ GET /v1/devices/:device_id/events[/:event_name]
 # EXAMPLE
 curl -H "Authorization: Bearer 38bb7b318cc6898c80317decb34525844bc9db55"
 https://api.spark.io/v1/devices/55ff70064939494339432586/events/temperature
+```
+
+#### Publishing events
+
+You can publish events to your devices using the publish event endpoint.
+
+
+```
+POST /v1/devices/events
+
+# EXAMPLE
+curl https://api.spark.io/v1/devices/events \
+     -d access_token=1234123412341234123412341234123412341234 \
+     -d "name=myevent" \
+     -d "data=Hello World" \
+     -d "private=true" \
+     -d "ttl=60"      
+```
+
+"data", "private", and "ttl" are all optional.  You can also send these with the Spark CLI:
+
+```
+# grab the spark-cli here - https://github.com/spark/spark-cli
+spark publish test "Hello World"
 ```
 
 

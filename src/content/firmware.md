@@ -1,6 +1,6 @@
 ---
 word: Firmware
-title: Firmware reference
+title: Core code (Firmware)
 order: 3
 ---
 
@@ -10,14 +10,12 @@ Spark Core Firmware
 Cloud Functions
 =====
 
-## Data and Control
-
 ### Spark.variable()
 
 Expose a *variable* through the Spark Cloud so that it can be called with `GET /v1/devices/{DEVICE_ID}/{VARIABLE}`.
 
 ```C++
-//EXAMPLE USAGE
+// EXAMPLE USAGE
 int analogvalue = 0;
 double tempC = 0;
 char *message = "my name is spark";
@@ -37,26 +35,27 @@ void loop()
   analogvalue = analogRead(A0);
   //Convert the reading into degree celcius
   tempC = (((analogvalue * 3.3)/4095) - 0.5) * 100;
-  Delay(200);
+  delay(200);
 }
 ```
+Currently, up to 10 Spark variables may be defined and each variable name is limited to a max of 12 characters.
 
 There are three supported data types:
 
  * `INT`
  * `DOUBLE`
- * `STRING`
+ * `STRING`   (maximum string size is 622 bytes)
 
 
 
 
 ```json
 # EXAMPLE REQUEST IN TERMINAL
-# Core ID is 0123456789abcdef01234567
-# Your access token is 1234123412341234123412341234123412341234
-curl "https://api.spark.io/v1/devices/0123456789abcdef01234567/analogvalue?access_token=1234123412341234123412341234123412341234"
-curl "https://api.spark.io/v1/devices/0123456789abcdef01234567/temp?access_token=1234123412341234123412341234123412341234"
-curl "https://api.spark.io/v1/devices/0123456789abcdef01234567/mess?access_token=1234123412341234123412341234123412341234"
+# Core ID is 0123456789abcdef
+# Your access token is 123412341234
+curl "https://api.spark.io/v1/devices/0123456789abcdef/analogvalue?access_token=123412341234"
+curl "https://api.spark.io/v1/devices/0123456789abcdef/temp?access_token=123412341234"
+curl "https://api.spark.io/v1/devices/0123456789abcdef/mess?access_token=123412341234"
 
 # In return you'll get something like this:
 960
@@ -81,34 +80,36 @@ Currently the application supports the creation of up to 4 different Spark funct
 
 In order to register a Spark function, the user provides the `funcKey`, which is the string name used to make a POST request and a `funcName`, which is the actual name of the function that gets called in the Spark app. The Spark function can return any integer; `-1` is commonly used for a failed function call.
 
-The length of the `funcKey` is limited to a max of 12 characters.
+The length of the `funcKey` is limited to a max of 12 characters. If you declare a function name longer than 12 characters it will be truncated to 12 characters. 
 
-A Spark function is set up to take one argument of the [String](http://arduino.cc/en/Reference/StringObject) datatype. This argument length is limited to a max of 64 characters.
+Example: Spark.function("someFunction1", ...); exposes a function called someFunction and not someFunction1
+
+A Spark function is set up to take one argument of the [String](http://docs.spark.io/firmware/#language-syntax-string-class) datatype. This argument length is limited to a max of 63 characters.
 
 ```cpp
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int brewCoffee(String command);
 
 void setup()
 {
-  //register the Spark function
+  // register the Spark function
   Spark.function("brew", brewCoffee);
 }
 
 void loop()
 {
-  //this loops forever
+  // this loops forever
 }
 
-//this function automagically gets called upon a matching POST request
+// this function automagically gets called upon a matching POST request
 int brewCoffee(String command)
 {
-  //look for the matching argument "coffee" <-- max of 64 characters long
+  // look for the matching argument "coffee" <-- max of 64 characters long
   if(command == "coffee")
   {
-    //do something here
-    activateWaterHeater();
-    activateWaterPump();
+    // some example functions you might have
+    //activateWaterHeater();
+    //activateWaterPump();
     return 1;
   }
   else return -1;
@@ -120,8 +121,8 @@ COMPLEMENTARY API CALL
 POST /v1/devices/{DEVICE_ID}/{FUNCTION}
 
 # EXAMPLE REQUEST
-curl https://api.spark.io/v1/devices/0123456789abcdef01234567/brew \
-     -d access_token=1234123412341234123412341234123412341234 \
+curl https://api.spark.io/v1/devices/0123456789abcdef/brew \
+     -d access_token=123412341234 \
      -d "args=coffee"
 ```
 
@@ -138,7 +139,7 @@ Spark events have the following properties:
 * name (1–63 ASCII characters)
 * public/private (default public)
 * ttl (time to live, 0–16777215 seconds, default 60)
-  !! NOTE: The user-specified ttl value is not yet implemented and will default to 60
+  !! NOTE: The user-specified ttl value is not yet implemented, so changing this property will not currently have any impact.
 * optional data (up to 63 bytes)
 
 Anyone may subscribe to public events; think of them like tweets.
@@ -147,16 +148,20 @@ Only the owner of the Core will be able to subscribe to private events.
 A Core may not publish events beginning with a case-insensitive match for "spark".
 Such events are reserved for officially curated data originating from the Spark Cloud.
 
+For the time being there exists no way to access a previously published but TTL-unexpired event.
+
+**NOTE:** Currently, a device can publish at rate of about 1 event/sec, with bursts of up to 4 allowed in 1 second. Back to back burst of 4 messages will take 4 seconds to recover.
+
 ---
 
 Publish a public event with the given name, no data, and the default TTL of 60 seconds.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.publish(const char *eventName);
 Spark.publish(String eventName);
 
-EXAMPLE USAGE
+// EXAMPLE USAGE
 Spark.publish("motion-detected");
 ```
 
@@ -165,11 +170,11 @@ Spark.publish("motion-detected");
 Publish a public event with the given name and data, with the default TTL of 60 seconds.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.publish(const char *eventName, const char *data);
 Spark.publish(String eventName, String data);
 
-EXAMPLE
+// EXAMPLE USAGE
 Spark.publish("temperature", "19 F");
 ```
 
@@ -178,11 +183,11 @@ Spark.publish("temperature", "19 F");
 Publish a public event with the given name, data, and TTL.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.publish(const char *eventName, const char *data, int ttl);
 Spark.publish(String eventName, String data, int ttl);
 
-EXAMPLE
+// EXAMPLE USAGE
 Spark.publish("lake-depth/1", "28m", 21600);
 ```
 
@@ -192,11 +197,11 @@ Publish a private event with the given name, data, and TTL.
 In order to publish a private event, you must pass all four parameters.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.publish(const char *eventName, const char *data, int ttl, PRIVATE);
 Spark.publish(String eventName, String data, int ttl, PRIVATE);
 
-EXAMPLE
+// EXAMPLE USAGE
 Spark.publish("front-door-unlocked", NULL, 60, PRIVATE);
 ```
 
@@ -211,7 +216,7 @@ curl -H "Authorization: Bearer {ACCESS_TOKEN_GOES_HERE}" \
 
 # Will return a stream that echoes text when your event is published
 event: motion-detected
-data: {"data":"23:23:44","ttl":"60","published_at":"2014-05-28T19:20:34.638Z","coreid":"0123456789abcdef01234567"}
+data: {"data":"23:23:44","ttl":"60","published_at":"2014-05-28T19:20:34.638Z","coreid":"0123456789abcdef"}
 ```
 
 ### Spark.subscribe()
@@ -230,9 +235,9 @@ void myHandler(const char *event, const char *data)
   Serial.print(event);
   Serial.print(", data: ");
   if (data)
-      Serial.println(data);
+    Serial.println(data);
   else
-      Serial.println("NULL");
+    Serial.println("NULL");
 }
 
 void setup()
@@ -256,11 +261,10 @@ Spark.subscribe("the_event_prefix", theHandler, MY_DEVICES);
 
 ---
 
-In the near future, you'll also be able to subscribe to events from a single Core by specifying the Core's ID.
+You are also able to subscribe to events from a single Core by specifying the Core's ID.
 
 ```cpp
 // Subscribe to events published from one Core
-// COMING SOON!
 Spark.subscribe("motion/front-door", motionHandler, "55ff70064989495339432587");
 ```
 
@@ -278,36 +282,28 @@ A _subscription handler_ (like `myHandler` above) must return `void` and take tw
 
 NOTE: A Core can register up to 4 event handlers. This means you can call `Spark.subscribe()` a maximum of 4 times; after that it will return `false`.
 
-## Connection Management
+### Spark.connect()
 
-### Spark.connected()
+`Spark.connect()` connects the Spark Core to the Cloud. This will automatically activate the Wi-Fi module and attempt to connect to a Wi-Fi network if the Core is not already connected to a network.
 
-Returns `true` when connected to the Spark Cloud, and `false` when disconnected from the Spark Cloud.
-
-```C++
-SYNTAX
-Spark.connected();
-
-RETURNS
-boolean (true or false)
-
-EXAMPLE USAGE
-void setup() {
-  Serial.begin(9600);
-}
+```cpp
+void setup() {}
 
 void loop() {
-  if (Spark.connected()) {
-    Serial.println("Connected!");
+  if (Spark.connected() == false) {
+    Spark.connect();
   }
-  delay(1000);
 }
 ```
 
-### Spark.disconnect() and Spark.connect()
+After you call `Spark.connect()`, your loop will not be called again until the Core finishes connecting to the Cloud. Typically, you can expect a delay of approximately one second.
 
-`Spark.disconnect()` disconnects the Spark Core from the Spark Cloud, while
-`Spark.connect()` subsequently reconnects.
+In most cases, you do not need to call `Spark.connect()`; it is called automatically when the Core turns on. Typically you only need to call `Spark.connect()` after disconnecting with [`Spark.disconnect()`](#spark-disconnect) or when you change the [system mode](#advanced-system-modes).
+
+
+### Spark.disconnect()
+
+`Spark.disconnect()` disconnects the Spark Core from the Spark Cloud.
 
 ```C++
 int counter = 10000;
@@ -347,119 +343,166 @@ void loop() {
 }
 ```
 
-The Spark Core connects to the cloud by default, so it's not necessary to call `Spark.connect()` unless you have explicitly disconnected the Core.
+While this function will disconnect from the Spark Cloud, it will keep the connection to the Wi-Fi network. If you would like to completely deactivate the Wi-Fi module, use [`WiFi.off()`](#wifi-off).
 
 NOTE: When the Core is disconnected, many features are not possible, including over-the-air updates, reading Spark.variables, and calling Spark.functions.
 
-*If you flash firmware that does not stay connected very long, you will NOT BE ABLE to flash new firmware.*
+*If you disconnect from the Cloud, you will NOT BE ABLE to flash new firmware over the air. A factory reset should resolve the issue.*
 
-A factory reset should solve this.
+### Spark.connected()
+
+Returns `true` when connected to the Spark Cloud, and `false` when disconnected from the Spark Cloud.
+
+```C++
+// SYNTAX
+Spark.connected();
+
+RETURNS
+boolean (true or false)
+
+// EXAMPLE USAGE
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (Spark.connected()) {
+    Serial.println("Connected!");
+  }
+  delay(1000);
+}
+```
+
+### Spark.process()
+
+`Spark.process()` checks the Wi-Fi module for incoming messages from the Cloud, and processes any messages that have come in. It also sends keep-alive pings to the Cloud, so if it's not called frequently, the connection to the Cloud may be lost.
+
+```cpp
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  while (1) {
+    Spark.process();
+    redundantLoop();
+  }
+}
+
+void redundantLoop() {
+  Serial.println("Well that was unnecessary.");
+}
+```
+
+`Spark.process()` is a blocking call, and blocks for a few milliseconds. `Spark.process()` is called automatically after every `loop()` and during delays. Typically you will not need to call `Spark.process()` unless you block in some other way and need to maintain the connection to the Cloud, or you change the [system mode](#advanced-system-modes). If the user puts the Core into `MANUAL` mode, the user is responsible for calling `Spark.process()`. The more frequently this function is called, the more responsive the Core will be to incoming messages, the more likely the Cloud connection will stay open, and the less likely that the CC3000's buffer will overrun.
+
+### Get Public IP
+
+Using this feature, the device can programmatically know its own public IP address.
+
+```cpp
+// Open a serial terminal and see the IP address printed out
+void handler(const char *topic, const char *data) {
+    Serial.println("received " + String(topic) + ": " + String(data));
+}
+
+void setup() {
+    Serial.begin(115200);
+    for(int i=0;i<5;i++) {
+        Serial.println("waiting... " + String(5 - i));
+        delay(1000);
+    }
+
+    Spark.subscribe("spark/", handler);
+    Spark.publish("spark/device/ip");
+}
+```
+
+### Get Device name
+
+This gives you the device name that is stored in the cloud,
+
+```cpp
+// Open a serial terminal and see the device name printed out
+void handler(const char *topic, const char *data) {
+    Serial.println("received " + String(topic) + ": " + String(data));
+}
+
+void setup() {
+    Serial.begin(115200);
+    for(int i=0;i<5;i++) {
+        Serial.println("waiting... " + String(5 - i));
+        delay(1000);
+    }
+
+    Spark.subscribe("spark/", handler);
+    Spark.publish("spark/device/name");
+}
+```
+
+### Get Random seed
+
+Grab 40 bytes of randomness from the cloud and {e}n{c}r{y}p{t} away!
+
+```cpp
+void handler(const char *topic, const char *data) {
+    Serial.println("received " + String(topic) + ": " + String(data));
+}
+
+void setup() {
+    Serial.begin(115200);
+    for(int i=0;i<5;i++) {
+        Serial.println("waiting... " + String(5 - i));
+        delay(1000);
+    }
+
+    Spark.subscribe("spark/", handler);
+    Spark.publish("spark/device/random");
+}
+```
 
 ### Spark.deviceID()
----
 
-`Spark.deviceID()` provides an easy way to extract the device ID of your Core.
+`Spark.deviceID()` provides an easy way to extract the device ID of your Core. It returns a [String object](#data-types-string-object) of the device ID, which is used frequently in Sparkland to identify your Core.
 
 ```cpp
-// Example Usage
+// EXAMPLE USAGE
 
 void setup()
 {
-    Serial.begin(9600);
-    delay(1000);
+  // Make sure your Serial Terminal app is closed before powering your Core
+  Serial.begin(9600);
+  // Now open your Serial Terminal, and hit any key to continue!
+  while(!Serial.available()) Spark.process();
 
-    String myID = Spark.deviceID();
-    // Prints out the device ID over Serial
-    Serial.println(myID);  
+  String myID = Spark.deviceID();
+  // Prints out the device ID over Serial
+  Serial.println(myID);
 }
 
-void loop()
-{
-
-}
+void loop() {}
 ```
-
-
-
-### Network
----
-
-```cpp
-// Example Usage
-
-void setup()
-{
-    Serial.begin(9600);
-    delay(1000);
-
-    // Prints out the network parameters over Serial
-    Serial.println(Network.SSID());
-    Serial.println(Network.gatewayIP());
-    Serial.println(Network.subnetMask());
-    Serial.println(Network.localIP());
-}
-
-void loop()
-{
-
-}
-```
-
-`Network.SSID()` returns the SSID of the network the Core is currently connected to.
-
-`Network.gatewayIP()` returns the gateway IP address of the network.
-
-`Network.subnetMask()` returns the subnet mask of the network.
-
-`Network.localIP()` returns the local IP address assigned to the Core.
-
-`Network.RSSI()` returns the signal strength of a Wifi network from from -127 to -1dB.
-  
-`Network.ping()` allows you to ping an IP address and know the number of packets received.
-
-
-<!-- TO DO -->
-<!-- Add example implementation here -->
-<!--
-### Spark.print()
-
-Prints to the debug console in Spark's web IDE.
--->
-
-<!-- TO DO -->
-<!-- Add example implementation here -->
-
-<!--
-### Spark.println()
-
-Prints to the debug console in Spark's web IDE, followed by a *newline* character.
--->
-<!-- TO DO -->
-<!-- Add example implementation here -->
-
-Sleep
----
 
 ### Spark.sleep()
 
 `Spark.sleep()` can be used to dramatically improve the battery life of a Spark-powered project by temporarily deactivating the Wi-Fi module, which is by far the biggest power draw.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.sleep(int seconds);
 ```
 
 ```C++
-// EXAMPLE USAGE: Put the Wi-Fi module in standbly (low power) for 5 seconds
+// EXAMPLE USAGE: Put the Wi-Fi module in standby (low power) for 5 seconds
 Spark.sleep(5);
 // The Core LED will flash green during sleep
 ```
-`Spark.sleep(int seconds)` does NOT stop the execution of user code (non-blocking call).  User code will continue running while the Wi-Fi module is in standby mode. During sleep, WiFi.status() will return WIFI_ON.  Once sleep time has expired and the Wi-FI module attempts reconnection, WiFi.status() will return value WIFI_CONNECTING and WIF_ON.
+`Spark.sleep(int seconds)` does NOT stop the execution of user code (non-blocking call).  User code will continue running while the Wi-Fi module is in standby mode. During sleep, WiFi.status() will return WIFI_OFF.  Once sleep time has expired and the Wi-FI module attempts reconnection, WiFi.status() will return value WIFI_CONNECTING and WIFI_ON.
 
-`Spark.sleep()` can also be used to put the entire Core into a *deep sleep* mode. In this particular mode, the Core shuts down the Wi-Fi chipset (CC3000) and puts the microcontroller in a stand-by mode.  When the Core awakens from deep sleep, it will reset the Core and run all user code from the beginning with no values being maintained in memory from before the deep sleep.  As such, it is recommended that deep sleep be called only after all user code has completed.
+`Spark.sleep(SLEEP_MODE_DEEP, int seconds)` can be used to put the entire Core into a *deep sleep* mode. In this particular mode, the Core shuts down the Wi-Fi chipset (CC3000) and puts the microcontroller in a stand-by mode.  When the Core awakens from deep sleep, it will reset the Core and run all user code from the beginning with no values being maintained in memory from before the deep sleep.  As such, it is recommended that deep sleep be called only after all user code has completed. The Standby mode is used to achieve the lowest power consumption.  After entering Standby mode, the SRAM and register contents are lost except for registers in the backup domain.
 
 ```C++
-SYNTAX
+// SYNTAX
 Spark.sleep(SLEEP_MODE_DEEP, int seconds);
 ```
 
@@ -469,6 +512,54 @@ Spark.sleep(SLEEP_MODE_DEEP,60);
 // The Core LED will shut off during deep sleep
 ```
 The Core will automatically *wake up* and reestablish the WiFi connection after the specified number of seconds.
+
+`Spark.sleep(uint16_t wakeUpPin, uint16_t edgeTriggerMode)` can be used to put the entire Core into a *stop* mode with *wakeup on interrupt*. In this particular mode, the Core shuts down the Wi-Fi chipset (CC3000) and puts the microcontroller in a stop mode with configurable wakeup pin and edge triggered interrupt. When the specific interrupt arrives, the Core awakens from stop mode, it will behave as if the Core is reset and run all user code from the beginning with no values being maintained in memory from before the stop mode. As such, it is recommended that stop mode be called only after all user code has completed. (Note: The new Spark Photon firmware will not reset before going into stop mode so all the application variables are preserved after waking up from this mode. The voltage regulator is put in low-power mode. This mode achieves the lowest power consumption while retaining the contents of SRAM and registers.)
+It is mandatory to update the *bootloader* (https://github.com/spark/core-firmware/tree/bootloader-patch-update) for proper functioning of this mode(valid only for Spark Core).
+
+```C++
+// SYNTAX
+Spark.sleep(uint16_t wakeUpPin, uint16_t edgeTriggerMode);
+```
+
+```C++
+// EXAMPLE USAGE: Put the Core into stop mode with wakeup using RISING edge interrupt on D0 pin
+Spark.sleep(D0,RISING);
+// The Core LED will shut off during sleep
+```
+
+*Parameters:*
+
+- `wakeUpPin`: the wakeup pin number. supports external interrupts on the following pins:
+    - D0, D1, D2, D3, D4, A0, A1, A3, A4, A5, A6, A7
+- `edgeTriggerMode`: defines when the interrupt should be triggered. Four constants are predefined as valid values:
+    - CHANGE to trigger the interrupt whenever the pin changes value,
+    - RISING to trigger when the pin goes from low to high,
+    - FALLING for when the pin goes from high to low.
+
+`Spark.sleep(uint16_t wakeUpPin, uint16_t edgeTriggerMode, long seconds)` can be used to put the entire Core into a *stop* mode with *wakeup on interrupt* or *wakeup after specified seconds*. In this particular mode, the Core shuts down the Wi-Fi chipset (CC3000) and puts the microcontroller in a stop mode with configurable wakeup pin and edge triggered interrupt or wakeup after the specified seconds . When the specific interrupt arrives or upon reaching configured seconds, the Core awakens from stop mode, it will behave as if the Core is reset and run all user code from the beginning with no values being maintained in memory from before the stop mode. As such, it is recommended that stop mode be called only after all user code has completed. (Note: The new Spark Photon firmware will not reset before going into stop mode so all the application variables are preserved after waking up from this mode. The voltage regulator is put in low-power mode. This mode achieves the lowest power consumption while retaining the contents of SRAM and registers.)
+
+It is mandatory to update the *bootloader* (https://github.com/spark/core-firmware/tree/bootloader-patch-update) for proper functioning of this mode(valid only for Spark Core).
+
+```C++
+// SYNTAX
+Spark.sleep(uint16_t wakeUpPin, uint16_t edgeTriggerMode, long seconds);
+```
+
+```C++
+// EXAMPLE USAGE: Put the Core into stop mode with wakeup using RISING edge interrupt on D0 pin or wakeup after 60 seconds whichever comes first
+Spark.sleep(D0,RISING,60);
+// The Core LED will shut off during sleep
+```
+
+*Parameters:*
+
+- `wakeUpPin`: the wakeup pin number. supports external interrupts on the following pins:
+    - D0, D1, D2, D3, D4, A0, A1, A3, A4, A5, A6, A7
+- `edgeTriggerMode`: defines when the interrupt should be triggered. Four constants are predefined as valid values:
+    - CHANGE to trigger the interrupt whenever the pin changes value,
+    - RISING to trigger when the pin goes from low to high,
+    - FALLING for when the pin goes from high to low.
+- `seconds`: wakeup after the specified number of seconds
 
 In *standard sleep mode*, the Core current consumption is in the range of: **30mA to 38mA**
 
@@ -484,9 +575,6 @@ Spark.sleep(int millis, array peripherals);
 
 <!-- TO DO -->
 <!-- Add example implementation here -->
-
-
-## Time
 
 ### Spark.syncTime()
 
@@ -508,6 +596,163 @@ void loop() {
 }
 ```
 
+
+
+WiFi
+=====
+
+### WiFi.on()
+
+`WiFi.on()` turns on the Wi-Fi module. Useful when you've turned it off, and you changed your mind.
+
+Note that `WiFi.on()` does not need to be called unless you have changed the [system mode](#advanced-system-modes) or you have previously turned the Wi-Fi module off.
+
+### WiFi.off()
+
+`WiFi.off()` turns off the Wi-Fi module. Useful for saving power, since most of the power draw of the Spark Core is the Wi-Fi module.
+
+### WiFi.connect()
+
+Attempts to connect to the Wi-Fi network. If there are no credentials stored, this will enter listening mode. If there are credentials stored, this will try the available credentials until connection is successful. When this function returns, the device may not have an IP address on the LAN; use `WiFi.ready()` to determine the connection status.
+
+### WiFi.disconnect()
+
+Disconnects from the Wi-Fi network, but leaves the Wi-Fi module on.
+
+### WiFi.connecting()
+
+This function will return `true` once the Core is attempting to connect using stored Wi-Fi credentials, and will return `false` once the Core has successfully connected to the Wi-Fi network.
+
+### WiFi.ready()
+
+This function will return `true` once the Core is connected to the network and has been assigned an IP address, which means that it's ready to open TCP sockets and send UDP datagrams. Otherwise it will return `false`.
+
+### WiFi.listen()
+
+This will enter listening mode, which opens a Serial connection to get Wi-Fi credentials over USB, and also listens for credentials over Smart Config.
+
+### WiFi.listening()
+
+This will return `true` once `WiFi.listen()` has been called and will return `false` once the Core has been given some Wi-Fi credentials to try, either over USB or Smart Config.
+
+### WiFi.setCredentials()
+
+Allows the user to set credentials for the Wi-Fi network from within the code. These credentials will be added to the CC3000's memory, and the Core will automatically attempt to connect to this network in the future.
+
+```cpp
+// Connects to an unsecured network.
+WiFi.setCredentials(SSID);
+WiFi.setCredentials("My_Router_Is_Big");
+
+// Connects to a network secured with WPA2 credentials.
+WiFi.setCredentials(SSID, PASSWORD);
+WiFi.setCredentials("My_Router", "mypasswordishuge");
+
+// Connects to a network with a specified authentication procedure.
+// Options are WPA2, WPA, or WEP.
+WiFi.setCredentials(SSID, PASSWORD, AUTH);
+WiFi.setCredentials("My_Router", "wepistheworst", WEP);
+```
+
+### WiFi.clearCredentials()
+
+This will clear all saved credentials from the CC3000's memory. This will return `true` on success and `false` if the CC3000 has an error.
+
+### WiFi.hasCredentials()
+
+Will return `true` if there are Wi-Fi credentials stored in the CC3000's memory.
+
+### WiFi.macAddress()
+
+`WiFi.macAddress()` returns the MAC address of the device.
+
+```cpp
+
+byte mac[6];
+
+void setup() {
+  Serial.begin(9600);
+  while (!Serial.available()) Spark.process();
+
+  WiFi.macAddress(mac);
+
+  Serial.print(mac[5],HEX);
+  Serial.print(":");
+  Serial.print(mac[4],HEX);
+  Serial.print(":");
+  Serial.print(mac[3],HEX);
+  Serial.print(":");
+  Serial.print(mac[2],HEX);
+  Serial.print(":");
+  Serial.print(mac[1],HEX);
+  Serial.print(":");
+  Serial.println(mac[0],HEX);
+}
+
+void loop() {}
+```
+
+### WiFi.SSID()
+
+`WiFi.SSID()` returns the SSID of the network the Core is currently connected to as a `char*`.
+
+### WiFi.RSSI()
+
+`WiFi.RSSI()` returns the signal strength of a Wifi network from from -127 to -1dB as an `int`. Positive return values indicate an error with 1 indicating a WiFi chip error and 2 indicating a time-out error. 
+
+### WiFi.ping()
+
+`WiFi.ping()` allows you to ping an IP address and returns the number of packets received as an `int`. It takes two forms:
+
+`WiFi.ping(IPAddress remoteIP)` takes an `IPAddress` and pings that address.
+
+`WiFi.ping(IPAddress remoteIP, uint8_t nTries)` and pings that address a specified number of times.
+
+### WiFi.localIP()
+
+`WiFi.localIP()` returns the local IP address assigned to the Core as an `IPAddress`.
+
+```cpp
+
+void setup() {
+  Serial.begin(9600);
+  while(!Serial.available()) Spark.process();
+
+  // Prints out the local IP over Serial.
+  Serial.println(WiFi.localIP());
+}
+```
+
+### WiFi.subnetMask()
+
+`WiFi.subnetMask()` returns the subnet mask of the network as an `IPAddress`.
+
+```cpp
+
+void setup() {
+  Serial.begin(9600);
+  while(!Serial.available()) Spark.process();
+
+  // Prints out the subnet mask over Serial.
+  Serial.println(WiFi.subnetMask());
+}
+```
+
+### WiFi.gatewayIP()
+
+`WiFi.gatewayIP()` returns the gateway IP address of the network as an `IPAddress`.
+
+```cpp
+
+void setup() {
+  Serial.begin(9600);
+  while(!Serial.available()) Spark.process();
+
+  // Prints out the gateway IP over Serial.
+  Serial.println(WiFi.gatewayIP());
+}
+```
+
 Input/Output
 =====
 
@@ -516,10 +761,10 @@ Setup
 
 ### pinMode()
 
-`pinMode()` configures the specified pin to behave either as an input or an output.
+`pinMode()` configures the specified pin to behave either as an input (with or without an internal weak pull-up or pull-down resistor), or an output.
 
 ```C++
-SYNTAX
+// SYNTAX
 pinMode(pin,mode);
 ```
 
@@ -528,9 +773,9 @@ pinMode(pin,mode);
 `pinMode()` does not return anything.
 
 ```C++
-EXAMPLE USAGE
-int button = D0;                       // button is connected to D0
-int LED = D1;                          // LED is connected to D1
+// EXAMPLE USAGE
+int button = D0;                      // button is connected to D0
+int LED = D1;                         // LED is connected to D1
 
 void setup()
 {
@@ -540,8 +785,8 @@ void setup()
 
 void loop()
 {
-  while(digitalRead(button) == HIGH)  // blink the LED as long as the button is pressed
-  {
+  // blink the LED as long as the button is pressed
+  while(digitalRead(button) == HIGH) {
     digitalWrite(LED, HIGH);          // sets the LED on
     delay(200);                       // waits for 200mS
     digitalWrite(LED, LOW);           // sets the LED off
@@ -558,31 +803,31 @@ I/O
 Write a `HIGH` or a `LOW` value to a digital pin.
 
 ```C++
-SYNTAX
+// SYNTAX
 digitalWrite(pin, value);
 ```
 
-If the pin has been configured as an OUTPUT with pinMode(), its voltage will be set to the corresponding value: 3.3V for HIGH, 0V (ground) for LOW.
+If the pin has been configured as an `OUTPUT` with `pinMode()` or if previously used with `analogWrite()`, its voltage will be set to the corresponding value: 3.3V for HIGH, 0V (ground) for LOW.
 
 `digitalWrite()` takes two arguments, `pin`: the number of the pin whose value you wish to set and `value`: `HIGH` or `LOW`.
 
 `digitalWrite()` does not return anything.
 
 ```C++
-EXAMPLE USAGE
-int LED = D1;                       // LED is connected to D1
+// EXAMPLE USAGE
+int LED = D1;              // LED connected to D1
 
 void setup()
 {
-  pinMode(LED, OUTPUT);             // sets pin as output
+  pinMode(LED, OUTPUT);    // sets pin as output
 }
 
 void loop()
 {
-  digitalWrite(LED, HIGH);          // sets the LED on
-  delay(200);                       // waits for 200mS
-  digitalWrite(LED, LOW);           // sets the LED off
-  delay(200);                       // waits for 200mS
+  digitalWrite(LED, HIGH); // sets the LED on
+  delay(200);              // waits for 200mS
+  digitalWrite(LED, LOW);  // sets the LED off
+  delay(200);              // waits for 200mS
 }
 ```
 
@@ -591,7 +836,7 @@ void loop()
 Reads the value from a specified digital `pin`, either `HIGH` or `LOW`.
 
 ```C++
-SYNTAX
+// SYNTAX
 digitalRead(pin);
 ```
 
@@ -600,21 +845,21 @@ digitalRead(pin);
 `digitalRead()` returns `HIGH` or `LOW`.
 
 ```C++
-EXAMPLE USAGE
-int button = D0;                       // button is connected to D0
-int LED = D1;                          // LED is connected to D1
-int val = 0;                           // variable to store the read value
+// EXAMPLE USAGE
+int button = D0;                   // button is connected to D0
+int LED = D1;                      // LED is connected to D1
+int val = 0;                       // variable to store the read value
 
 void setup()
 {
-  pinMode(LED, OUTPUT);               // sets pin as output
-  pinMode(button, INPUT_PULLDOWN);    // sets pin as input
+  pinMode(LED, OUTPUT);            // sets pin as output
+  pinMode(button, INPUT_PULLDOWN); // sets pin as input
 }
 
 void loop()
 {
-  val = digitalRead(button);          // read the input pin
-  digitalWrite(LED, val);             // sets the LED to the button's value
+  val = digitalRead(button);       // read the input pin
+  digitalWrite(LED, val);          // sets the LED to the button's value
 }
 
 ```
@@ -628,29 +873,30 @@ On the Spark Core, this function works on pins A0, A1, A4, A5, A6, A7, D0 and D1
 The analogWrite function has nothing to do with the analog pins or the analogRead function.
 
 ```C++
-SYNTAX
+// SYNTAX
 analogWrite(pin, value);
 ```
 
-`analogWrite()` takes two arguments, `pin`: the number of the pin whose value you wish to set and `value`: the duty cycle: between 0 (always off) and 255 (always on).
+`analogWrite()` takes two arguments, `pin`: the number of the pin whose value you wish to set and `value`: the duty cycle: between 0 (always off) and 255 (always on).  NOTE: `pinMode(pin, OUTPUT);` is required before calling `analogWrite(pin, value);` or else the `pin` will not be initialized as a PWM output and set to the desired duty cycle.
 
 `analogWrite()` does not return anything.
 
 ```C++
-EXAMPLE USAGE
-int ledPin = D1;                // LED connected to digital pin D1
-int analogPin = A0;             // potentiometer connected to analog pin A0
-int val = 0;                    // variable to store the read value
+// EXAMPLE USAGE
+int ledPin = D1;               // LED connected to digital pin D1
+int analogPin = A0;            // potentiometer connected to analog pin A0
+int val = 0;                   // variable to store the read value
 
 void setup()
 {
-  pinMode(ledPin, OUTPUT);      // sets the pin as output
+  pinMode(ledPin, OUTPUT);     // sets the pin as output
 }
 
 void loop()
 {
-  val = analogRead(analogPin);  // read the input pin
-  analogWrite(ledPin, val/16);  // analogRead values go from 0 to 4095, analogWrite values from 0 to 255
+  val = analogRead(analogPin); // read the input pin
+  analogWrite(ledPin, val/16); // analogRead values go from 0 to 4095,
+                               // analogWrite values from 0 to 255.
   delay(10);
 }
 ```
@@ -660,7 +906,7 @@ void loop()
 Reads the value from the specified analog pin. The Spark Core has 8 channels (A0 to A7) with a 12-bit resolution. This means that it will map input voltages between 0 and 3.3 volts into integer values between 0 and 4095. This yields a resolution between readings of: 3.3 volts / 4096 units or, 0.0008 volts (0.8 mV) per unit.
 
 ```C++
-SYNTAX
+// SYNTAX
 analogRead(pin);
 ```
 
@@ -669,7 +915,7 @@ analogRead(pin);
 `analogRead()` returns an integer value ranging from 0 to 4095.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int ledPin = D1;                // LED connected to digital pin D1
 int analogPin = A0;             // potentiometer connected to analog pin A0
 int val = 0;                    // variable to store the read value
@@ -684,6 +930,157 @@ void loop()
   val = analogRead(analogPin);  // read the input pin
   analogWrite(ledPin, val/16);  // analogRead values go from 0 to 4095, analogWrite values from 0 to 255
   delay(10);
+}
+```
+
+Advanced I/O
+------
+
+### tone()
+
+Generates a square wave of the specified frequency and duration (and 50% duty cycle) on a timer channel pin (D0, D1, A0, A1, A4, A5, A6, A7, RX, TX). Use of the tone() function will interfere with PWM output on the selected pin.
+
+```C++
+// SYNTAX
+tone(pin, frequency, duration)
+```
+
+`tone()` takes three arguments, `pin`: the pin on which to generate the tone, `frequency`: the frequency of the tone in hertz and `duration`: the duration of the tone in milliseconds (a zero value = continuous tone).
+
+`tone()` does not return anything.
+
+```C++
+// EXAMPLE USAGE
+// Plays a melody - Connect small speaker to analog pin A0
+
+int speakerPin = A0;
+
+// notes in the melody:
+int melody[] = {1908,2551,2551,2273,2551,0,2024,1908}; //C4,G3,G3,A3,G3,0,B3,C4
+
+// note durations: 4 = quarter note, 8 = eighth note, etc.:
+int noteDurations[] = {4,8,8,4,4,4,4,4 };
+
+void setup() {
+  // iterate over the notes of the melody:
+  for (int thisNote = 0; thisNote < 8; thisNote++) {
+
+    // to calculate the note duration, take one second 
+    // divided by the note type.
+    //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+    int noteDuration = 1000/noteDurations[thisNote];
+    tone(speakerPin, melody[thisNote],noteDuration);
+
+    // to distinguish the notes, set a minimum time between them.
+    // the note's duration + 30% seems to work well:
+    int pauseBetweenNotes = noteDuration * 1.30;
+    delay(pauseBetweenNotes);
+    // stop the tone playing:
+    noTone(speakerPin);
+  }
+}
+```
+
+### noTone()
+
+Stops the generation of a square wave triggered by tone() on a specified pin (D0, D1, A0, A1, A4, A5, A6, A7, RX, TX). Has no effect if no tone is being generated.
+
+
+```C++
+// SYNTAX
+noTone(pin)
+```
+
+`noTone()` takes one argument, `pin`: the pin on which to stop generating the tone.
+
+`noTone()` does not return anything.
+
+```C++
+//See the tone() example
+```
+
+### shiftOut()
+
+Shifts out a byte of data one bit at a time on a specified pin. Starts from either the most (i.e. the leftmost) or least (rightmost) significant bit. Each bit is written in turn to a data pin, after which a clock pin is pulsed (taken high, then low) to indicate that the bit is available.
+Note: if you're interfacing with a device that's clocked by rising edges, you'll need to make sure that the clock pin is low before the call to shiftOut(), e.g. with a call to digitalWrite(clockPin, LOW).
+This is a software implementation; see also the SPI function, which provides a hardware implementation that is faster but works only on specific pins.
+
+
+```C++
+// SYNTAX
+shiftOut(dataPin, clockPin, bitOrder, value)
+```
+
+`shiftOut()` takes four arguments, 'dataPin': the pin on which to output each bit, `clockPin`: the pin to toggle once the dataPin has been set to the correct value, `bitOrder`: which order to shift out the bits; either MSBFIRST or LSBFIRST (Most Significant Bit First, or, Least Significant Bit First) and `value`: the data (byte) to shift out.
+
+`shiftOut()` does not return anything.
+
+```C++
+// EXAMPLE USAGE
+
+// Use digital pins D0 for data and D1 for clock
+int dataPin = D0;
+int clock = D1;
+
+uint8_t data = 50;
+
+setup() {
+	// Set data and clock pins as OUTPUT pins before using shiftOut()
+	pinMode(dataPin, OUTPUT);
+	pinMode(clock, OUTPUT);
+	
+	// shift out data using MSB first
+	shiftOut(dataPin, clock, MSBFIRST, data);
+
+	// Or do this for LSBFIRST serial
+	shiftOut(dataPin, clock, LSBFIRST, data);  
+}
+
+loop() {
+	// nothing to do
+}
+```
+
+### shiftIn()
+
+Shifts in a byte of data one bit at a time. Starts from either the most (i.e. the leftmost) or least (rightmost) significant bit. For each bit, the clock pin is pulled high, the next bit is read from the data line, and then the clock pin is taken low.
+Note: if you're interfacing with a device that's clocked by rising edges, you'll need to make sure that the clock pin is low before the call to shiftOut(), e.g. with a call to digitalWrite(clockPin, LOW).
+This is a software implementation; see also the SPI function, which provides a hardware implementation that is faster but works only on specific pins.
+
+
+```C++
+// SYNTAX
+shiftIn(dataPin, clockPin, bitOrder)
+```
+
+`shiftIn()` takes three arguments, 'dataPin': the pin on which to input each bit, `clockPin`: the pin to toggle to signal a read from dataPin, `bitOrder`: which order to shift in the bits; either MSBFIRST or LSBFIRST (Most Significant Bit First, or, Least Significant Bit First).
+
+`shiftIn()` returns the byte value read.
+
+
+```C++
+// EXAMPLE USAGE
+
+// Use digital pins D0 for data and D1 for clock
+int dataPin = D0;
+int clock = D1;
+
+uint8_t data;
+
+setup() {
+	// Set data as INPUT and clock pin as OUTPUT before using shiftIn()
+	pinMode(dataPin, INPUT);
+	pinMode(clock, OUTPUT);
+	
+	// shift in data using MSB first
+	data = shiftIn(dataPin, clock, MSBFIRST);
+
+	// Or do this for LSBFIRST serial
+	data = shiftIn(dataPin, clock, LSBFIRST);  
+}
+
+loop() {
+	// nothing to do
 }
 ```
 
@@ -694,11 +1091,15 @@ Communication
 Serial
 -----
 
-Used for communication between the Spark Core and a computer or other devices. The Core has two serial channels:  
+Used for communication between the Spark Core and a computer or other devices. The Core has two serial channels:
 
-`Serial:` This channel communicates through the USB port and when connected to a computer, will show up as a virtual COM port.  
+`Serial:` This channel communicates through the USB port and when connected to a computer, will show up as a virtual COM port.
 
-`Serial1:` This channel is available via the Core's TX and RX pins. To use these pins to communicate with your personal computer, you will need an additional USB-to-serial adapter. To use them to communicate with an external TTL serial device, connect the TX pin to your device's RX pin, the RX to your device's TX pin, and the ground of your Core to your device's ground.
+`Serial1:` This channel is available via the Core's TX and RX pins.
+
+`Serial2:` This channel is optionally available via the Core's D1(TX) and D0(RX) pins. To use Serial2, add `#include "Serial2/Serial2.h"` near the top of your Spark App's main code file.
+
+To use the TX/RX (Serial1) or D1/D0 (Serial2) pins to communicate with your personal computer, you will need an additional USB-to-serial adapter. To use them to communicate with an external TTL serial device, connect the TX pin to your device's RX pin, the RX to your device's TX pin, and the ground of your Core to your device's ground.
 
 **NOTE:** Please take into account that the voltage levels on these pins runs at 0V to 3.3V and should not be connected directly to a computer's RS232 serial port which operates at +/- 12V and can damage the Core.
 
@@ -707,19 +1108,25 @@ Used for communication between the Spark Core and a computer or other devices. T
 Sets the data rate in bits per second (baud) for serial data transmission. For communicating with the computer, use one of these rates: 300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 28800, 38400, 57600, or 115200. You can, however, specify other rates - for example, to communicate over pins TX and RX with a component that requires a particular baud rate.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.begin(speed);    // serial via USB port
 Serial1.begin(speed);   // serial via TX and RX pins
+Serial2.begin(speed);   // serial via D1(TX) and D0(RX) pins
 ```
 `speed`: parameter that specifies the baud rate *(long)*
 
 `begin()` does not return anything
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 void setup()
 {
   Serial.begin(9600);   // open serial over USB
+  // On Windows it will be necessary to implement the following line:
+  // Make sure your Serial Terminal app is closed before powering your Core
+  // Now open your Serial Terminal, and hit any key to continue!
+  while(!Serial.available()) SPARK_WLAN_Loop();
+
   Serial1.begin(9600);  // open serial over TX and RX pins
 
   Serial.println("Hello Computer");
@@ -734,7 +1141,7 @@ void loop() {}
 Disables serial communication, allowing the RX and TX pins to be used for general input and output. To re-enable serial communication, call `Serial1.begin()`.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial1.end();
 ```
 
@@ -743,7 +1150,7 @@ Serial1.end();
 Get the number of bytes (characters) available for reading from the serial port. This is data that's already arrived and stored in the serial receive buffer (which holds 64 bytes).
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 void setup()
 {
   Serial.begin(9600);
@@ -757,13 +1164,13 @@ void loop()
   if (Serial.available())
   {
     int inByte = Serial.read();
-    Serial1.print(inByte, BYTE);
+    Serial1.write(inByte);
   }
   // read from port 1, send to port 0:
   if (Serial1.available())
   {
     int inByte = Serial1.read();
-    Serial.print(inByte, BYTE);
+    Serial.write(inByte);
   }
 }
 ```
@@ -773,7 +1180,7 @@ void loop()
 Returns the next byte (character) of incoming serial data without removing it from the internal serial buffer. That is, successive calls to peek() will return the same character, as will the next call to `read()`.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.peek();
 Serial1.peek();
 ```
@@ -784,7 +1191,7 @@ Serial1.peek();
 Writes binary data to the serial port. This data is sent as a byte or series of bytes; to send the characters representing the digits of a number use the `print()` function instead.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.write(val);
 Serial.write(str);
 Serial.write(buf, len);
@@ -800,7 +1207,7 @@ Serial.write(buf, len);
 `write()` will return the number of bytes written, though reading that number is optional.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 void setup()
 {
   Serial.begin(9600);
@@ -810,7 +1217,7 @@ void loop()
 {
   Serial.write(45); // send a byte with the value 45
 
-   int bytesSent = Serial.write(“hello”); //send the string “hello” and return the length of the string.
+  int bytesSent = Serial.write(“hello”); //send the string “hello” and return the length of the string.
 }
 ```
 
@@ -819,31 +1226,30 @@ void loop()
 Reads incoming serial data.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.read();
 Serial1.read();
 ```
 `read()` returns the first byte of incoming serial data available (or -1 if no data is available) - *int*
 
 ```C++
-EXAMPLE USAGE
-int incomingByte = 0;   // for incoming serial data
+// EXAMPLE USAGE
+int incomingByte = 0; // for incoming serial data
 
 void setup() {
-        Serial.begin(9600);     // opens serial port, sets data rate to 9600 bps
+  Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
 }
 
 void loop() {
+  // send data only when you receive data:
+  if (Serial.available() > 0) {
+    // read the incoming byte:
+    incomingByte = Serial.read();
 
-        // send data only when you receive data:
-        if (Serial.available() > 0) {
-                // read the incoming byte:
-                incomingByte = Serial.read();
-
-                // say what you got:
-                Serial.print("I received: ");
-                Serial.println(incomingByte, DEC);
-        }
+    // say what you got:
+    Serial.print("I received: ");
+    Serial.println(incomingByte, DEC);
+  }
 }
 ```
 ### print()
@@ -870,12 +1276,12 @@ An optional second parameter specifies the base (format) to use; permitted value
 Prints data to the serial port as human-readable ASCII text followed by a carriage return character (ASCII 13, or '\r') and a newline character (ASCII 10, or '\n'). This command takes the same forms as `Serial.print()`.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.println(val);
 Serial.println(val, format);
 ```
 
-*Parameters:*  
+*Parameters:*
 
 - `val`: the value to print - any data type
 - `format`: specifies the number base (for integral data types) or number of decimal places (for floating point types)
@@ -890,8 +1296,10 @@ int analogValue = 0;    // variable to hold the analog value
 
 void setup()
 {
-  // open the serial port at 9600 bps:
+  // Make sure your Serial Terminal app is closed before powering your Core
   Serial.begin(9600);
+  // Now open your Serial Terminal, and hit any key to continue!
+  while(!Serial.available()) SPARK_WLAN_Loop();
 }
 
 void loop() {
@@ -915,7 +1323,7 @@ void loop() {
 Waits for the transmission of outgoing serial data to complete.
 
 ```C++
-SYNTAX
+// SYNTAX
 Serial.flush();
 Serial1.flush();
 ```
@@ -968,16 +1376,15 @@ Sets the SPI clock divider relative to the system clock. The available dividers 
 SPI.setClockDivider(divider) ;
 ```
 Where the parameter, `divider` can be:
-```
-SPI_CLOCK_DIV2
-SPI_CLOCK_DIV4
-SPI_CLOCK_DIV8
-SPI_CLOCK_DIV16
-SPI_CLOCK_DIV32
-SPI_CLOCK_DIV64
-SPI_CLOCK_DIV128
-SPI_CLOCK_DIV256
-```
+
+ - `SPI_CLOCK_DIV2`
+ - `SPI_CLOCK_DIV4`
+ - `SPI_CLOCK_DIV8`
+ - `SPI_CLOCK_DIV16`
+ - `SPI_CLOCK_DIV32`
+ - `SPI_CLOCK_DIV64`
+ - `SPI_CLOCK_DIV128`
+ - `SPI_CLOCK_DIV256`
 
 ### setDataMode()
 
@@ -989,12 +1396,10 @@ SPI.setDataMode(mode) ;
 ```
 Where the parameter, `mode` can be:
 
-```
-SPI_MODE0
-SPI_MODE1
-SPI_MODE2
-SPI_MODE3
-```
+ - `SPI_MODE0`
+ - `SPI_MODE1`
+ - `SPI_MODE2`
+ - `SPI_MODE3`
 
 ### transfer()
 
@@ -1012,6 +1417,36 @@ Wire
 ![I2C]({{assets}}/images/core-pin-i2c.jpg)
 
 This library allows you to communicate with I2C / TWI devices. On the Spark Core, D0 is the Serial Data Line (SDA) and D1 is the Serial Clock (SCL). Both of these pins runs at 3.3V logic but are tolerant to 5V.
+Connect a pull-up resistor(1.5K to 10K) on SDA line. Connect a pull-up resistor(1.5K to 10K) on SCL line.
+
+### setSpeed()
+
+Sets the I2C clock speed. This is an optional call (not from the original Arduino specs.) and must be called once before calling begin().  The default I2C clock speed is 100KHz.
+
+```C++
+// SYNTAX
+Wire.setSpeed(clockSpeed);
+Wire.begin();
+```
+
+Parameters: 
+
+- `clockSpeed`: CLOCK_SPEED_100KHZ, CLOCK_SPEED_400KHZ or user specified speeds.
+
+### stretchClock()
+
+Enables or Disables I2C clock stretching. This is an optional call (not from the original Arduino specs.) and must be called once before calling begin(). The default I2C stretch mode is disabled.
+
+```C++
+// SYNTAX
+Wire.stretchClock(stretch);
+Wire.begin();
+```
+
+Parameters: 
+
+- `stretch`: boolean. true will enable clock stretching. false will disable clock stretching.
+
 
 ### begin()
 
@@ -1075,7 +1510,7 @@ Wire.endTransmission();
 Wire.endTransmission(stop);
 ```
 
-Parameters: `stop` : boolean.  
+Parameters: `stop` : boolean.
 `true` will send a stop message, releasing the bus after transmission. `false` will send a restart, keeping the connection active.
 
 Returns: `byte`, which indicates the status of the transmission:
@@ -1103,31 +1538,29 @@ Parameters:
 - `data`: an array of data to send as bytes
 - `length`: the number of bytes to transmit
 
-Returns:  `byte`  
+Returns:  `byte`
 
 `write()` will return the number of bytes written, though reading that number is optional.
 
 ```C++
 // EXAMPLE USAGE
-byte val = 0;
+// Master Writer running on Core No.1 (Use with corresponding Slave Reader running on Core No.2)
 
 void setup()
 {
-  Wire.begin(); // join i2c bus
+  Wire.begin();              // join i2c bus as master
 }
+
+byte x = 0;
 
 void loop()
 {
-  Wire.beginTransmission(44); // transmit to device #44 (0x2c)
-                              // device address is specified in datasheet
-  Wire.write(val);             // sends value byte  
-  Wire.endTransmission();     // stop transmitting
+  Wire.beginTransmission(4); // transmit to slave device #4
+  Wire.write("x is ");       // sends five bytes
+  Wire.write(x);             // sends one byte  
+  Wire.endTransmission();    // stop transmitting
 
-  val++;        // increment value
-  if(val == 64) // if reached 64th position (max)
-  {
-    val = 0;    // start over from lowest value
-  }
+  x++;
   delay(500);
 }
 ```
@@ -1154,11 +1587,12 @@ Returns: The next byte received
 
 ```C++
 // EXAMPLE USAGE
+// Master Reader running on Core No.1 (Use with corresponding Slave Writer running on Core No.2)
 
 void setup()
 {
-  Wire.begin();        // join i2c bus (address optional for master)
-  Serial.begin(9600);  // start serial for output
+  Wire.begin();              // join i2c bus as master
+  Serial.begin(9600);        // start serial for output
 }
 
 void loop()
@@ -1166,7 +1600,7 @@ void loop()
   Wire.requestFrom(2, 6);    // request 6 bytes from slave device #2
 
   while(Wire.available())    // slave may send less than requested
-  {
+  { 
     char c = Wire.read();    // receive a byte as character
     Serial.print(c);         // print the character
   }
@@ -1181,17 +1615,70 @@ Registers a function to be called when a slave device receives a transmission fr
 
 Parameters: `handler`: the function to be called when the slave receives data; this should take a single int parameter (the number of bytes read from the master) and return nothing, e.g.: `void myHandler(int numBytes) `
 
+```C++
+// EXAMPLE USAGE
+// Slave Reader running on Core No.2 (Use with corresponding Master Writer running on Core No.1)
+
+// function that executes whenever data is received from master
+// this function is registered as an event, see setup()
+void receiveEvent(int howMany)
+{
+  while(1 < Wire.available())   // loop through all but the last
+  {
+    char c = Wire.read();       // receive byte as a character
+    Serial.print(c);            // print the character
+  }
+  int x = Wire.read();          // receive byte as an integer
+  Serial.println(x);            // print the integer
+}
+
+void setup()
+{
+  Wire.begin(4);                // join i2c bus with address #4
+  Wire.onReceive(receiveEvent); // register event
+  Serial.begin(9600);           // start serial for output
+}
+
+void loop()
+{
+  delay(100);
+}
+```
+
 ### onRequest()
 
 Register a function to be called when a master requests data from this slave device.
 
 Parameters: `handler`: the function to be called, takes no parameters and returns nothing, e.g.: `void myHandler() `
 
+```C++
+// EXAMPLE USAGE
+// Slave Writer running on Core No.2 (Use with corresponding Master Reader running on Core No.1)
+
+// function that executes whenever data is requested by master
+// this function is registered as an event, see setup()
+void requestEvent()
+{
+  Wire.write("hello ");         // respond with message of 6 bytes as expected by master
+}
+
+void setup()
+{
+  Wire.begin(2);                // join i2c bus with address #2
+  Wire.onRequest(requestEvent); // register event
+}
+
+void loop()
+{
+  delay(100);
+}
+```
+
 IPAddress
 -----
 ### IPAddress
 
-Creates an IP address that can be used with TCPServer, TCPClient, UPD, and Network objects.
+Creates an IP address that can be used with TCPServer, TCPClient, and UDP objects.
 
 ```C++
 // EXAMPLE USAGE
@@ -1205,7 +1692,7 @@ IPAddress IPfromBytes( server );
 The IPAddress also allows for comparisons.
 
 ```C++
-if (IPfromInt == IPfromBytes) 
+if (IPfromInt == IPfromBytes)
 {
   Serial.println("Same IP addresses");
 }
@@ -1215,15 +1702,15 @@ You can also use indexing the get or change individual bytes in the IP address.
 
 ```C++
 // PING ALL HOSTS ON YOUR SUBNET EXCEPT YOURSELF
-IPAddress localIP = Network.localIP();
+IPAddress localIP = WiFi.localIP();
 uint8_t myLastAddrByte = localIP[3];
 for(uint8_t ipRange=1; ipRange<255; ipRange++)
 {
   if (ipRange != myLastAddrByte)
   {
     localIP[3] = ipRange;
-    Network.ping(localIP);
-  }  
+    WiFi.ping(localIP);
+  }
 }
 ```
 
@@ -1236,13 +1723,13 @@ uint8_t server[] = { 10, 0, 0, 2};
 IPAddress IPfromBytes;
 IPfromBytes = server;
 ```
-  
+
 Finally IPAddress can be used directly with print.
 
 ```C++
 // PRINT THE CORE'S IP ADDRESS IN
 // THE FORMAT 192.168.0.10
-IPAddress myIP = Network.localIP();
+IPAddress myIP = WiFi.localIP();
 Serial.println(myIP);    // prints the core's IP address
 ```
 
@@ -1268,17 +1755,18 @@ TCPClient client;
 
 void setup()
 {
-    // start listening for clients
-    server.begin();
+  // start listening for clients
+  server.begin();
 
-    Serial.begin(9600);
+  // Make sure your Serial Terminal app is closed before powering your Core
+  Serial.begin(9600);
+  // Now open your Serial Terminal, and hit any key to continue!
+  while(!Serial.available()) SPARK_WLAN_Loop();
 
-    delay(1000);
-
-    Serial.println(Network.localIP());
-    Serial.println(Network.subnetMask());
-    Serial.println(Network.gatewayIP());
-    Serial.println(Network.SSID());
+  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.subnetMask());
+  Serial.println(WiFi.gatewayIP());
+  Serial.println(WiFi.SSID());
 }
 
 void loop()
@@ -1381,8 +1869,11 @@ TCPClient client;
 byte server[] = { 74, 125, 224, 72 }; // Google
 void setup()
 {
+  // Make sure your Serial Terminal app is closed before powering your Core
   Serial.begin(9600);
-  delay(1000);
+  // Now open your Serial Terminal, and hit any key to continue!
+  while(!Serial.available()) SPARK_WLAN_Loop();
+
   Serial.println("connecting...");
 
   if (client.connect(server, 80))
@@ -1545,6 +2036,8 @@ UDP
 
 This class enables UDP messages to be sent and received.
 
+The UDP protocol implementation has known issues that will require extra consideration when programming with it. Please refer to the Known Issues category of the Community for details. The are also numerous working examples and workarounds in the searchable Community topics.
+
 <!-- TO DO -->
 <!-- Add more examples-->
 
@@ -1557,38 +2050,38 @@ Initializes the UDP library and network settings.
 
 // UDP Port used for two way communication
 unsigned int localPort = 8888;
- 
+
 // An UDP instance to let us send and receive packets over UDP
 UDP Udp;
- 
+
 void setup() {
-    // start the UDP
-    Udp.begin(localPort);
-    
-    // Print your device IP Address via serial 
-    Serial.begin(9600);
-    Serial.println(Network.localIP());
+  // start the UDP
+  Udp.begin(localPort);
+
+  // Print your device IP Address via serial
+  Serial.begin(9600);
+  Serial.println(WiFi.localIP());
 }
- 
+
 void loop() {
-    // Check if data has been received
-    if (Udp.parsePacket() > 0) {
-        
-        // Read first char of data received
-        char c = Udp.read();
-        
-        // Ignore other chars
-        Udp.flush();
-        
-        // Store sender ip and port
-        IPAddress ipAddress = Udp.remoteIP();
-        int port = Udp.remotePort();
-        
-        // Echo back data to sender
-        Udp.beginPacket(ipAddress, port);
-        Udp.write(c);
-        Udp.endPacket();
-    }
+  // Check if data has been received
+  if (Udp.parsePacket() > 0) {
+
+    // Read first char of data received
+    char c = Udp.read();
+
+    // Ignore other chars
+    Udp.flush();
+
+    // Store sender ip and port
+    IPAddress ipAddress = Udp.remoteIP();
+    int port = Udp.remotePort();
+
+    // Echo back data to sender
+    Udp.beginPacket(ipAddress, port);
+    Udp.write(c);
+    Udp.endPacket();
+  }
 }
 ```
 
@@ -1607,13 +2100,6 @@ UDP.available()
 
 Returns the number of bytes available to read.
 
-Parameters:
-
- - `remoteIP`: the IP address of the remote connection (4 bytes)
- - `remotePort`: the port of the remote connection (int)
-
-Its returns nothing.
-
 ### beginPacket()
 
 Starts a connection to write UDP data to the remote connection.
@@ -1622,6 +2108,13 @@ Starts a connection to write UDP data to the remote connection.
 // SYNTAX
 UDP.beginPacket(remoteIP, remotePort);
 ```
+
+Parameters:
+
+ - `remoteIP`: the IP address of the remote connection (4 bytes)
+ - `remotePort`: the port of the remote connection (int)
+
+It returns nothing.
 
 ### endPacket()
 
@@ -1703,7 +2196,7 @@ Parameters: NONE
 
 ### remoteIP()
 
-Gets the IP address of the remote connection. This function must be called after `UDP.parsePacket()`.
+Returns the IP address of sender of the packet parsed by `UDP.parsePacket()`.
 
 ```cpp
 // SYNTAX
@@ -1713,12 +2206,12 @@ Parameters: NONE
 
 Returns:
 
- - 4 bytes : the IP address of the remote connection
+ - 4 bytes : the IP address of the sender of the packet parsed by `UDP.parsePacket()`.
 
 
 ### remotePort()
 
-Gets the port of the remote UDP connection. This function must be called after `UDP.parsePacket()`.
+Returns the port from which the UDP packet was sent. The packet is the one most recently processed by  UDP.parsePacket()`.
 
 ```cpp
 // SYNTAX
@@ -1728,10 +2221,10 @@ Parameters: NONE
 
 Returns:
 
-- `int`: the port of the UDP connection to a remote host
+- `int`: the port from which the packet parsed by `UDP.parsePacket()` was sent.
 
 Libraries
-===
+=====
 
 Servo
 ---
@@ -2058,8 +2551,8 @@ Retrieve the weekday for the current or given time.
  - 3 = Tuesday
  - 4 = Wednesday
  - 5 = Thursday
- - 6 = Saturday
- - 7 = Sunday
+ - 6 = Friday
+ - 7 = Saturday
 
 ```cpp
 // Print the weekday number for the current time
@@ -2130,7 +2623,7 @@ The Spark Core will remember this offset until reboot.
 
 ```cpp
 // Set time zone to Eastern USA daylight saving time
-Time.zone(-5);
+Time.zone(-4);
 ```
 
 Parameters: floating point offset from UTC in hours, from -12.0 to 13.0
@@ -2141,9 +2634,9 @@ Parameters: floating point offset from UTC in hours, from -12.0 to 13.0
 Set the Spark Core's time to the given timestamp.
 
 *NOTE*: This will override the time set by the Spark Cloud.
-If the cloud connection drops, the reconnection handshake will set the time again.
+If the cloud connection drops, the reconnection handshake will set the time again
 
-Also see: [`Spark.syncTime()`](#/firmware/time-spark-synctime)
+Also see: [`Spark.syncTime()`](#spark-synctime)
 
 ```cpp
 // Set the time to 2014-10-11 13:37:42
@@ -2162,9 +2655,34 @@ Serial.print(Time.timeStr()); // Wed May 21 01:08:47 2014
 
 Returns: String
 
+System
+---
+
+### reset()
+
+Resets the device, just like hitting the reset button or powering down and back up.
+
+```C++
+uint32_t lastReset = 0;
+
+void setup() {
+    lastReset = millis();
+}
+
+void loop() {
+  // Reset after 5 minutes of operation
+  // ==================================
+  if (millis() - lastReset > 5*60000UL) {
+    System.reset();
+  }
+}
+```
+
 
 Other functions
-====
+=====
+
+Note that most of the functions in newlib described at https://sourceware.org/newlib/libc.html are available for use in addition to the functions outlined below.
 
 Time
 ---
@@ -2176,7 +2694,7 @@ Returns the number of milliseconds since the Spark Core began running the curren
 `unsigned long time = millis();`
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 unsigned long time;
 
 void setup()
@@ -2203,7 +2721,7 @@ Returns the number of microseconds since the Spark Core began running the curren
 `unsigned long time = micros();`
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 unsigned long time;
 
 void setup()
@@ -2233,20 +2751,20 @@ delay(ms);
 `ms` is the number of milliseconds to pause *(unsigned long)*
 
 ```C++
-EXAMPLE USAGE
-int ledPin = D1;                 // LED connected to digital pin D1
+// EXAMPLE USAGE
+int ledPin = D1;              // LED connected to digital pin D1
 
 void setup()
 {
-  pinMode(ledPin, OUTPUT);      // sets the digital pin as output
+  pinMode(ledPin, OUTPUT);    // sets the digital pin as output
 }
 
 void loop()
 {
-  digitalWrite(ledPin, HIGH);   // sets the LED on
-  delay(1000);                  // waits for a second
-  digitalWrite(ledPin, LOW);    // sets the LED off
-  delay(1000);                  // waits for a second
+  digitalWrite(ledPin, HIGH); // sets the LED on
+  delay(1000);                // waits for a second
+  digitalWrite(ledPin, LOW);  // sets the LED off
+  delay(1000);                // waits for a second
 }
 ```
 **NOTE:**
@@ -2263,20 +2781,20 @@ delayMicroseconds(us);
 `us` is the number of microseconds to pause *(unsigned int)*
 
 ```C++
-EXAMPLE USAGE
-int outPin = D1;                 // digital pin D1
+// EXAMPLE USAGE
+int outPin = D1;              // digital pin D1
 
 void setup()
 {
-  pinMode(outPin, OUTPUT);      // sets the digital pin as output
+  pinMode(outPin, OUTPUT);    // sets the digital pin as output
 }
 
 void loop()
 {
-  digitalWrite(outPin, HIGH);   // sets the pin on
-  delayMicroseconds(50);        // pauses for 50 microseconds
-  digitalWrite(outPin, LOW);    // sets the pin off
-  delayMicroseconds(50);        // pauses for 50 microseconds
+  digitalWrite(outPin, HIGH); // sets the pin on
+  delayMicroseconds(50);      // pauses for 50 microseconds
+  digitalWrite(outPin, LOW);  // sets the pin off
+  delayMicroseconds(50);      // pauses for 50 microseconds
 }
 ```
 
@@ -2287,34 +2805,8 @@ Interrupts
 
 Specifies a function to call when an external interrupt occurs. Replaces any previous function that was attached to the interrupt.
 
-The Spark Core currently supports external interrupts on the following pins:
-
-D0, D1, D2, D3, D4  
-A0, A1, A3, A4, A5, A6, A7  
-
-`attachInterrupt(pin, function, mode);`
-
-*Parameters:*  
-
-- `pin`: the pin number
-- `function`: the function to call when the interrupt occurs; this function must take no parameters and return nothing. This function is sometimes referred to as an *interrupt service routine* (ISR).
-- `mode`: defines when the interrupt should be triggered. Four constants are predefined as valid values:
-    - CHANGE to trigger the interrupt whenever the pin changes value,
-    - RISING to trigger when the pin goes from low to high,
-    - FALLING for when the pin goes from high to low.
-
-The function does not return anything.
-
-**NOTE:**  
-Inside the attached function, `delay()` won't work and the value returned by `millis()` will not increment. Serial data received while in the function may be lost. You should declare as `volatile` any variables that you modify within the attached function.
-
-*Using Interrupts:*  
-Interrupts are useful for making things happen automatically in microcontroller programs, and can help solve timing problems. Good tasks for using an interrupt may include reading a rotary encoder, or monitoring user input.
-
-If you wanted to insure that a program always caught the pulses from a rotary encoder, so that it never misses a pulse, it would make it very tricky to write a program to do anything else, because the program would need to constantly poll the sensor lines for the encoder, in order to catch pulses when they occurred. Other sensors have a similar interface dynamic too, such as trying to read a sound sensor that is trying to catch a click, or an infrared slot sensor (photo-interrupter) trying to catch a coin drop. In all of these situations, using an interrupt can free the microcontroller to get some other work done while not missing the input.
-
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 void blink(void);
 int ledPin = D1;
 volatile int state = LOW;
@@ -2336,6 +2828,32 @@ void blink()
 }
 ```
 
+The Spark Core currently supports external interrupts on the following pins:
+
+D0, D1, D2, D3, D4
+A0, A1, A3, A4, A5, A6, A7
+
+`attachInterrupt(pin, function, mode);`
+
+*Parameters:*
+
+- `pin`: the pin number
+- `function`: the function to call when the interrupt occurs; this function must take no parameters and return nothing. This function is sometimes referred to as an *interrupt service routine* (ISR).
+- `mode`: defines when the interrupt should be triggered. Four constants are predefined as valid values:
+    - CHANGE to trigger the interrupt whenever the pin changes value,
+    - RISING to trigger when the pin goes from low to high,
+    - FALLING for when the pin goes from high to low.
+
+The function does not return anything.
+
+**NOTE:**
+Inside the attached function, `delay()` won't work and the value returned by `millis()` will not increment. Serial data received while in the function may be lost. You should declare as `volatile` any variables that you modify within the attached function.
+
+*Using Interrupts:*
+Interrupts are useful for making things happen automatically in microcontroller programs, and can help solve timing problems. Good tasks for using an interrupt may include reading a rotary encoder, or monitoring user input.
+
+If you wanted to insure that a program always caught the pulses from a rotary encoder, so that it never misses a pulse, it would make it very tricky to write a program to do anything else, because the program would need to constantly poll the sensor lines for the encoder, in order to catch pulses when they occurred. Other sensors have a similar interface dynamic too, such as trying to read a sound sensor that is trying to catch a click, or an infrared slot sensor (photo-interrupter) trying to catch a coin drop. In all of these situations, using an interrupt can free the microcontroller to get some other work done while not missing the input.
+
 
 ### detatchInterrupt()
 
@@ -2345,24 +2863,29 @@ Turns off the given interrupt.
 
 `pin` is the pin number of the interrupt to disable.
 
+
 ### interrupts()
 
 Re-enables interrupts (after they've been disabled by `noInterrupts()`). Interrupts allow certain important tasks to happen in the background and are enabled by default. Some functions will not work while interrupts are disabled, and incoming communication may be ignored. Interrupts can slightly disrupt the timing of code, however, and may be disabled for particularly critical sections of code.
 
-`interrupts()` neither accepts a parameter nor returns anything.
-
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 void setup() {}
 
 void loop()
 {
-  noInterrupts();
-  // critical, time-sensitive code here
-  interrupts();
+  noInterrupts(); // disable interrupts
+  //
+  // put critical, time-sensitive code here
+  //
+  interrupts();   // enable interrupts
+  //
   // other code here
+  //
 }
 ```
+
+`interrupts()` neither accepts a parameter nor returns anything.
 
 ### noInterrupts()
 
@@ -2370,21 +2893,13 @@ Disables interrupts (you can re-enable them with `interrupts()`). Interrupts all
 
 `noInterrupts()` neither accepts a parameter nor returns anything.
 
-```C++
-EXAMPLE USAGE
-void setup() {}
-
-void loop()
-{
-  noInterrupts();
-  // critical, time-sensitive code here
-  interrupts();
-  // other code here
-}
-```
 
 Math
 ---
+
+Note that in addition to functions outlined below all of the newlib math functions described at [sourceware.org](https://sourceware.org/newlib/libm.html) are also available for use by simply including the math.h header file thus:
+
+`#include "math.h"`
 
 ### min()
 
@@ -2392,13 +2907,13 @@ Calculates the minimum of two numbers.
 
 `min(x, y)`
 
-`x` is the first number, any data type  
-`y` is the second number, any data type  
+`x` is the first number, any data type
+`y` is the second number, any data type
 
 The functions returns the smaller of the two numbers.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 sensVal = min(sensVal, 100); // assigns sensVal to the smaller of sensVal or 100
                              // ensuring that it never gets above 100.
 ```
@@ -2422,13 +2937,13 @@ Calculates the maximum of two numbers.
 
 `max(x, y)`
 
-`x` is the first number, any data type  
-`y` is the second number, any data type  
+`x` is the first number, any data type
+`y` is the second number, any data type
 
 The functions returns the larger of the two numbers.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 sensVal = max(senVal, 20); // assigns sensVal to the larger of sensVal or 20
                            // (effectively ensuring that it is at least 20)
 ```
@@ -2452,9 +2967,9 @@ Computes the absolute value of a number.
 
 `abs(x);`
 
-where `x` is the number  
+where `x` is the number
 
-The function returns `x` if `x` is greater than or equal to `0`  
+The function returns `x` if `x` is greater than or equal to `0`
 and returns `-x` if `x` is less than `0`.
 
 **WARNING:**
@@ -2473,17 +2988,17 @@ Constrains a number to be within a range.
 
 `constrain(x, a, b);`
 
-`x` is the number to constrain, all data types  
+`x` is the number to constrain, all data types
 `a` is the lower end of the range, all data types
 `b` is the upper end of the range, all data types
 
-The function will return:  
-`x`: if x is between `a` and `b`  
-`a`: if `x` is less than `a`  
+The function will return:
+`x`: if x is between `a` and `b`
+`a`: if `x` is less than `a`
 `b`: if `x` is greater than `b`
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 sensVal = constrain(sensVal, 10, 150);
 // limits range of sensor values to between 10 and 150
 ```
@@ -2508,7 +3023,7 @@ is also valid and works well.
 
 The `map()` function uses integer math so will not generate fractions, when the math might indicate that it should do so. Fractional remainders are truncated, and are not rounded or averaged.
 
-*Parameters:*  
+*Parameters:*
 
 - `value`: the number to map
 - `fromLow`: the lower bound of the value's current range
@@ -2519,8 +3034,8 @@ The `map()` function uses integer math so will not generate fractions, when the 
 The function returns the mapped value
 
 ```C++
-EXAMPLE USAGE
-/* Map an analog value to 8 bits (0 to 255) */
+// EXAMPLE USAGE
+// Map an analog value to 8 bits (0 to 255)
 void setup() {}
 
 void loop()
@@ -2531,7 +3046,7 @@ void loop()
 }
 ```
 
-*Appendix:*  
+*Appendix:*
 For the mathematically inclined, here's the whole function
 
 ```C++
@@ -2547,7 +3062,7 @@ Calculates the value of a number raised to a power. `pow()` can be used to raise
 
 `pow(base, exponent);`
 
-`base` is the number *(float)*  
+`base` is the number *(float)*
 `exponent` is the power to which the base is raised *(float)*
 
 The function returns the result of the exponentiation *(double)*
@@ -2564,11 +3079,102 @@ Calculates the square root of a number.
 
 The function returns the number's square root *(double)*
 
+## Random Numbers
+
+The firmware incorporates a pseudo-random number generator. 
+
+### random()
+
+Retrieves the next random value, restricted to a given range. 
+
+ `random(max);`
+
+Parameters
+
+- `max` - the upper limit of the random number to retrieve.
+
+Returns: a random value between 0 and up to, but not including `max`. 
+
+```c++
+int r = random(10);
+// r is >= 0 and < 10
+// The smallest value returned is 0
+// The largest value returned is 9
+```
+
+ NB: When `max` is 0, the result is always 0.
+
+---
+
+`random(min,max);`
+
+Parameters: 
+
+ - `min` - the lower limit (inclusive) of the random number to retrieve.
+ - `max` - the upper limit (exclusive) of the random number to retrieve.
+
+Returns: a random value from `min` and up to, but not including `max`. 
+
+  
+```c++
+int r = random(10, 100);
+// r is >= 10 and < 100
+// The smallest value returned is 10
+// The largest value returned is 99
+```
+
+  NB: If `min` is greater or equal to `max`, the result is always 0. 
+
+### randomSeed()
+
+`randomSeed(newSeed);`
+
+Parameters:
+ 
+ - `newSeed` - the new random seed
+
+The pseudorandom numbers produced by the firmware are derived from a single value - the random seed. 
+The value of this seed fully determines the sequence of random numbers produced by successive
+calls to `random()`. Using the same seed on two separate runs will produce
+the same sequence of random numbers, and in contrast, using different seeds 
+will produce a different sequence of random numbers.
+
+On startup, the default random seed is [set by the system](http://www.cplusplus.com/reference/cstdlib/srand/) to 1.
+Unless the seed is modified, the same sequence of random numbers would be produced each time
+the system starts. 
+
+Fortunately, when the core connects to the cloud, it receives a very randomized seed value,
+which is used as the random seed. So you can be sure the random numbers produced
+will be different each time your program is run.
+
+
+*** Disable random seed from the cloud ***
+
+When the core receives a new random seed from the cloud, it's passed to this function:
+
+```
+void random_seed_from_cloud(unsigned int seed);
+```
+
+The system implementation of this function calls `randomSeed()` to set
+the new seed value. If you don't wish to use random seed values from the cloud, 
+you can take control of the ransom seeds set by adding this code to your app:
+
+```cpp
+void random_seed_from_cloud(unsigned int seed) {
+   // don't do anything with this. Continue with existing seed.
+}
+```
+
+In the example, the seed is simply ignored, so the system will continue using
+whatever seed was previously set. In this case, the random seed will not be set 
+from the cloud, and setting the seed is left to up you.
+
 
 EEPROM
 ----
 
-The EEPROM emulator allocates 100 bytes of the Spark Core's built-in flash memory to act as EEPROM. Unlike "true EEPROM, flash doesn't suffer from write "wear".  The EEPROM functions can be used to store small amounts of data in flash that will persist even after the Core resets after a deep sleep.
+The EEPROM emulator allocates 100 bytes of the Spark Core's built-in flash memory to act as EEPROM. Unlike "true" EEPROM, flash doesn't suffer from write "wear".  The EEPROM functions can be used to store small amounts of data in flash that will persist even after the Core resets after a deep sleep.
 
 
 ### read()
@@ -2579,8 +3185,8 @@ Read a byte of data from the emulated EEPROM.
 `address` is the address (int) of the EERPOM location (0-99) to read
 
 ```C++
-EXAMPLE USAGE
-/* Read the value of the second byte of EEPROM */
+// EXAMPLE USAGE
+// Read the value of the second byte of EEPROM
 int addr = 1;
 uint8_t value = EEPROM.read(addr);
 ```
@@ -2594,16 +3200,131 @@ Write a byte of data to the emulated EEPROM.
 `value` is the byte data (uint8_t) to write
 
 ```C++
-EXAMPLE USAGE
-/* Write a byte value to the second byte of EEPROM */
+// EXAMPLE USAGE
+// Write a byte value to the second byte of EEPROM
 int addr = 1;
 uint8_t val = 0x45;
 EEPROM.write(addr, val);
+```
+
+Advanced
+=====
+
+System modes
+----
+
+By default, the Spark Core connects to the Cloud and processes messages automatically. However there are many cases where a user will want to take control over that connection. There are three available system modes: `AUTOMATIC`, `SEMI_AUTOMATIC`, and `MANUAL`. These modes describe how connectivity is handled.
+
+System modes must be called before the setup() function. By default, the Core is always in `AUTOMATIC` mode.
+
+### Automatic mode
 
 
+The automatic mode of connectivity provides the default behavior of the Spark Core, which is that:
+
+```cpp
+SYSTEM_MODE(AUTOMATIC);
+
+void setup() {
+  // This won't be called until the Core is connected
+}
+
+void loop() {
+  // Neither will this
+}
+```
+
+- When the Core starts up, it automatically tries to connect to Wi-Fi and the Spark Cloud.
+- Once a connection with the Spark Cloud has been established, the user code starts running.
+- Messages to and from the Cloud are handled in between runs of the user loop; the user loop automatically alternates with [`Spark.process()`](#spark-process).
+- `Spark.process()` is also called during any delay() of at least 1 second.
+- If the user loop blocks for more than about 20 seconds, the connection to the Cloud will be lost. To prevent this from happening, the user can call `Spark.process()` manually.
+- If the connection to the Cloud is ever lost, the Core will automatically attempt to reconnect. This re-connection will block from a few milliseconds up to 8 seconds.
+- `SYSTEM_MODE(AUTOMATIC)` does not need to be called, because it is the default state; however the user can invoke this method to make the mode explicit.
+
+In automatic mode, the user can still call `Spark.disconnect()` to disconnect from the Cloud, but is then responsible for re-connecting to the Cloud by calling `Spark.connect()`.
+
+### Semi-automatic mode
+
+
+The semi-automatic mode will not attempt to connect the Core to the Cloud automatically. However once the Core is connected to the Cloud (through some user intervention), messages will be processed automatically, as in the automatic mode above.
+
+```cpp
+SYSTEM_MODE(SEMI_AUTOMATIC);
+
+void setup() {
+  // This is called immediately
+}
+
+void loop() {
+  if (buttonIsPressed()) {
+    Spark.connect();
+  } else {
+    doOfflineStuff();
+  }
+}
+```
+
+The semi-automatic mode is therefore much like the automatic mode, except:
+
+- When the Core boots up, the user code will begin running immediately.
+- When the user calls [`Spark.connect()`](#spark-connect), the user code will be blocked, and the Core will attempt to negotiate a connection. This connection will block until either the Core connects to the Cloud or an interrupt is fired that calls [`Spark.disconnect()`](#spark-disconnect).
+
+### Manual mode
+
+
+The "manual" mode puts the Spark Core's connectivity completely in the user's control. This means that the user is responsible for both establishing a connection to the Spark Cloud and handling communications with the Cloud by calling [`Spark.process()`](#spark-process) on a regular basis.
+
+```cpp
+SYSTEM_MODE(MANUAL);
+
+void setup() {
+  // This will run automatically
+}
+
+void loop() {
+  if (buttonIsPressed()) {
+    Spark.connect();
+  }
+  if (Spark.connected()) {
+    Spark.process();
+    doOtherStuff();
+  }
+}
+```
+
+When using manual mode:
+
+- The user code will run immediately when the Core is powered on.
+- Once the user calls [`Spark.connect()`](#spark-connect), the Core will attempt to begin the connection process.
+- Once the Core is connected to the Cloud ([`Spark.connected()`](#spark-connected)` == true`), the user must call `Spark.process()` regularly to handle incoming messages and keep the connection alive. The more frequently `Spark.process()` is called, the more responsive the Core will be to incoming messages.
+- If `Spark.process()` is called less frequently than every 20 seconds, the connection with the Cloud will die. It may take a couple of additional calls of `Spark.process()` for the Core to recognize that the connection has been lost.
+
+System.factoryReset()
+----
+
+This will perform a factory reset and do the following:
+
+- Restore factory reset firmware from external flash (tinker)
+- Erase WiFi profiles
+- Enter Listening mode upon completion
+
+```cpp
+System.factoryReset()
+```
+
+System.bootloader()
+----
+
+
+The device will enter DFU-mode and boot up in DFU when a reset occurs until a user firmware is uploaded via DFU-util.
+
+```cpp
+System.bootloader()
+```
 
 Language Syntax
-========
+=====
 The following documentation is based on the Arduino reference which can be found [here.](http://arduino.cc/en/Reference/HomePage)
 
 Structure
@@ -2611,8 +3332,8 @@ Structure
 ### setup()
 The setup() function is called when an application starts. Use it to initialize variables, pin modes, start using libraries, etc. The setup function will only run once, after each powerup or reset of the Spark Core.
 
-```C++
-EXAMPLE USAGE
+```cpp
+// EXAMPLE USAGE
 int button = D0;
 int LED = D1;
 //setup initializes D0 as input and D1 as output
@@ -2693,7 +3414,7 @@ The statements being evaluated inside the parentheses require the use of one or 
 ```C++
 x == y (x is equal to y)
 x != y (x is not equal to y)
-x <  y (x is less than y)  
+x <  y (x is less than y)
 x >  y (x is greater than y)
 x <= y (x is less than or equal to y)
 x >= y (x is greater than or equal to y)
@@ -2760,7 +3481,7 @@ for (initialization; condition; increment)
 The *initialization* happens first and exactly once. Each time through the loop, the *condition* is tested; if it's true, the statement block, and the *increment* is executed, then the condition is tested again. When the *condition* becomes false, the loop ends.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 // slowy make the LED glow brighter
 int ledPin = D1; // LED in series with 470 ohm resistor on pin D1
 
@@ -2772,10 +3493,10 @@ void setup()
 
 void loop()
 {
-   for (int i=0; i <= 255; i++){
-      analogWrite(ledPin, i);
-      delay(10);
-   }
+  for (int i=0; i <= 255; i++){
+    analogWrite(ledPin, i);
+    delay(10);
+  }
 }
 ```
 The C `for` loop is much more flexible than for loops found in some other computer languages, including BASIC. Any or all of the three header elements may be omitted, although the semicolons are required. Also the statements for initialization, condition, and increment can be any valid C statements with unrelated variables, and use any C datatypes including floats. These types of unusual for statements may provide solutions to some rare programming problems.
@@ -2803,13 +3524,13 @@ void setup()
 
 void loop()
 {
-   int x = 1;
-   for (int i = 0; i > -1; i = i + x)
-   {
-      analogWrite(ledPin, i);
-      if (i == 255) x = -1;     // switch direction at peak
-      delay(10);
-   }
+  int x = 1;
+  for (int i = 0; i > -1; i = i + x)
+  {
+    analogWrite(ledPin, i);
+    if (i == 255) x = -1;     // switch direction at peak
+    delay(10);
+  }
 }
 ```
 
@@ -2837,18 +3558,18 @@ switch (var)
 `label` is a value to compare the variable to
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 switch (var)
 {
-    case 1:
-      //do something when var equals 1
-      break;
-    case 2:
-      //do something when var equals 2
-      break;
-    default:
-      // if nothing else matches, do the default
-      // default is optional
+  case 1:
+    // do something when var equals 1
+    break;
+  case 2:
+    // do something when var equals 2
+    break;
+  default:
+    // if nothing else matches, do the
+    // default (which is optional)
 }
 ```
 
@@ -2866,7 +3587,7 @@ while(expression)
 `expression` is a (boolean) C statement that evaluates to true or false.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 var = 0;
 while(var < 200)
 {
@@ -2883,12 +3604,12 @@ The `do` loop works in the same manner as the `while` loop, with the exception t
 SYNTAX
 do
 {
-    // statement block
+  // statement block
 } while (test condition);
 ```
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 do
 {
   delay(50);          // wait for sensors to stabilize
@@ -2902,17 +3623,17 @@ do
 `break` is used to exit from a `do`, `for`, or `while` loop, bypassing the normal loop condition. It is also used to exit from a `switch` statement.
 
 ```C++
-EXAMPLE USAGE
-for (int x = 0; x < 255; x ++)
+// EXAMPLE USAGE
+for (int x = 0; x < 255; x++)
 {
-    digitalWrite(ledPin, x);
-    sens = analogRead(sensorPin);  
-    if (sens > threshold)         // bail out on sensor detect
-    {
-       x = 0;
-       break;
-    }  
-    delay(50);
+  digitalWrite(ledPin, x);
+  sens = analogRead(sensorPin);
+  if (sens > threshold)
+  {
+    x = 0;
+    break;  // exit for() loop on sensor detect
+  }
+  delay(50);
 }
 ```
 
@@ -2921,10 +3642,10 @@ for (int x = 0; x < 255; x ++)
 The continue statement skips the rest of the current iteration of a loop (`do`, `for`, or `while`). It continues by checking the conditional expression of the loop, and proceeding with any subsequent iterations.
 
 ```C++
-EXAMPLE USAGE
-for (x = 0; x < 255; x ++)
+// EXAMPLE USAGE
+for (x = 0; x < 255; x++)
 {
-    if (x > 40 && x < 120) continue;    // create jump in values
+    if (x > 40 && x < 120) continue;  // create jump in values
 
     digitalWrite(PWMpin, x);
     delay(50);
@@ -2975,16 +3696,20 @@ The use of `goto` is discouraged in C programming, and some authors of C program
 With that said, there are instances where a `goto` statement can come in handy, and simplify coding. One of these situations is to break out of deeply nested `for` loops, or `if` logic blocks, on a certain condition.
 
 ```C++
-EXAMPLE USAGE
-for(byte r = 0; r < 255; r++){
-    for(byte g = 255; g > -1; g--){
-        for(byte b = 0; b < 255; b++){
-            if (analogRead(0) > 250){ goto bailout;}
-            // more statements ...
-        }
+// EXAMPLE USAGE
+for(byte r = 0; r < 255; r++) {
+  for(byte g = 255; g > -1; g--) {
+    for(byte b = 0; b < 255; b++) {
+      if (analogRead(0) > 250) {
+        goto bailout;
+      }
+      // more statements ...
     }
+  }
 }
 bailout:
+// Code execution jumps here from
+// goto bailout; statement
 ```
 
 Further syntax
@@ -3061,14 +3786,14 @@ Comments are lines in the program that are used to inform yourself or others abo
 Comments only purpose are to help you understand (or remember) how your program works or to inform others how your program works. There are two different ways of marking a line as a comment:
 
 ```C++
-EXAMPLE USAGE
- x = 5;  // This is a single line comment. Anything after the slashes is a comment
-         // to the end of the line
+// EXAMPLE USAGE
+x = 5;  // This is a single line comment. Anything after the slashes is a comment
+        // to the end of the line
 
 /* this is multiline comment - use it to comment out whole blocks of code
 
-if (gwb == 0){   // single line comment is OK inside a multiline comment
-x = 3;           /* but not another multiline comment - this is invalid */
+if (gwb == 0) {   // single line comment is OK inside a multiline comment
+  x = 3;          /* but not another multiline comment - this is invalid */
 }
 // don't forget the "closing" comment - they have to be balanced!
 */
@@ -3082,13 +3807,13 @@ When experimenting with code, "commenting out" parts of your program is a conven
 
 `#define` is a useful C component that allows the programmer to give a name to a constant value before the program is compiled. Defined constants don't take up any program memory space on the chip. The compiler will replace references to these constants with the defined value at compile time.
 
-`#define constantName value`  
+`#define constantName value`
 Note that the # is necessary.
 
 This can have some unwanted side effects though, if for example, a constant name that had been `#defined` is included in some other constant or variable name. In that case the text would be replaced by the #defined number (or text).
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 #define ledPin 3
 // The compiler will replace any mention of ledPin with the value 3 at compile time.
 ```
@@ -3098,11 +3823,11 @@ In general, the [const]() keyword is preferred for defining constants and should
 **TIP:**
 There is no semicolon after the #define statement. If you include one, the compiler will throw cryptic errors further down the page.
 
-`#define ledPin 3;    // this is an error`
+`#define ledPin 3;   // this is an error`
 
 Similarly, including an equal sign after the #define statement will also generate a cryptic compiler error further down the page.
 
-`#define ledPin  = 3  // this is also an error`
+`#define ledPin = 3  // this is also an error`
 
 ### #include
 
@@ -3120,7 +3845,7 @@ Stores the value to the right of the equal sign in the variable to the left of t
 The single equal sign in the C programming language is called the assignment operator. It has a different meaning than in algebra class where it indicated an equation or equality. The assignment operator tells the microcontroller to evaluate whatever value or expression is on the right side of the equal sign, and store it in the variable to the left of the equal sign.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int sensVal;                // declare an integer variable named sensVal
 senVal = analogRead(A0);    // store the (digitized) input voltage at analog pin A0 in SensVal
 ```
@@ -3136,7 +3861,7 @@ These operators return the sum, difference, product, or quotient (respectively) 
 If one of the numbers (operands) are of the type float or of type double, floating point math will be used for the calculation.
 
 ```C++
-EXAMPLE USAGES
+// EXAMPLE USAGES
 y = y + 3;
 x = x - 7;
 i = j * 6;
@@ -3144,7 +3869,7 @@ r = r / 5;
 ```
 
 ```C++
-SYNTAX
+// SYNTAX
 result = value1 + value2;
 result = value1 - value2;
 result = value1 * value2;
@@ -3155,26 +3880,26 @@ result = value1 / value2;
 **TIPS:**
 
   - Know that integer constants default to int, so some constant calculations may overflow (e.g. 50 * 50,000,000 will yield a negative result).
-  - Choose variable sizes that are large enough to hold the largest results from your calculations  
-  - Know at what point your variable will "roll over" and also what happens in the other direction e.g. (0 - 1) OR (0 + 2147483648)  
-  - For math that requires fractions, use float variables, but be aware of their drawbacks: large size, slow computation speeds  
-  - Use the cast operator e.g. (int)myFloat to convert one variable type to another on the fly.  
+  - Choose variable sizes that are large enough to hold the largest results from your calculations
+  - Know at what point your variable will "roll over" and also what happens in the other direction e.g. (0 - 1) OR (0 + 2147483648)
+  - For math that requires fractions, use float variables, but be aware of their drawbacks: large size, slow computation speeds
+  - Use the cast operator e.g. (int)myFloat to convert one variable type to another on the fly.
 
 ### % (modulo)
 
-Calculates the remainder when one integer is divided by another. It is useful for keeping a variable within a particular range (e.g. the size of an array).  It is defined so that `a % b == a - ((a / b) * b)`.  
+Calculates the remainder when one integer is divided by another. It is useful for keeping a variable within a particular range (e.g. the size of an array).  It is defined so that `a % b == a - ((a / b) * b)`.
 
 `result = dividend % divisor`
 
-`dividend` is the number to be divided and  
+`dividend` is the number to be divided and
 `divisor` is the number to divide by.
 
 `result` is the remainder
 
-The remainder function can have unexpected behavoir when some of the opperands are negative.  If the dividend is negative, then the result will be the smallest negative equivalency class.  In other words, when `a` is negative, `(a % b) == (a mod b) - b` where (a mod b) follows the standard mathematical definition of mod.  When the divisor is negative, the result is the same as it would be if it was positive.  
+The remainder function can have unexpected behavoir when some of the opperands are negative.  If the dividend is negative, then the result will be the smallest negative equivalency class.  In other words, when `a` is negative, `(a % b) == (a mod b) - b` where (a mod b) follows the standard mathematical definition of mod.  When the divisor is negative, the result is the same as it would be if it was positive.
 
 ```C++
-EXAMPLE USAGES
+// EXAMPLE USAGES
 x = 9 % 5;   // x now contains 4
 x = 5 % 5;   // x now contains 0
 x = 4 % 5;   // x now contains 4
@@ -3196,7 +3921,7 @@ void setup() {}
 void loop()
 {
   values[i] = analogRead(A0);
-  i = (i + 1) % 10;   // modulo operator rolls over variable  
+  i = (i + 1) % 10;   // modulo operator rolls over variable
 }
 ```
 
@@ -3245,7 +3970,7 @@ if (!x)
 //is true if x is false (i.e. if x equals 0).
 ```
 
-**WARNING:**  
+**WARNING:**
 Make sure you don't mistake the boolean AND operator, && (double ampersand) for the bitwise AND operator & (single ampersand). They are entirely different beasts.
 
 Similarly, do not confuse the boolean || (double pipe) operator with the bitwise OR operator | (single pipe).
@@ -3269,7 +3994,7 @@ The bitwise AND operator in C++ is a single ampersand, &, used between two other
 ```
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int a =  92;    // in binary: 0000000001011100
 int b = 101;    // in binary: 0000000001100101
 int c = a & b;  // result:    0000000001000100, or 68 in decimal.
@@ -3287,7 +4012,7 @@ The bitwise OR operator in C++ is the vertical bar symbol, |. Like the & operato
     0  1  1  1    (operand1 | operand2) - returned result
 ```
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int a =  92;    // in binary: 0000000001011100
 int b = 101;    // in binary: 0000000001100101
 int c = a | b;  // result:    0000000001111101, or 125 in decimal.
@@ -3306,7 +4031,7 @@ There is a somewhat unusual operator in C++ called bitwise EXCLUSIVE OR, also kn
 Another way to look at bitwise XOR is that each bit in the result is a 1 if the input bits are different, or 0 if they are the same.
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int x = 12;     // binary: 1100
 int y = 10;     // binary: 1010
 int z = x ^ y;  // binary: 0110, or decimal 6
@@ -3344,11 +4069,11 @@ variable << number_of_bits
 variable >> number_of_bits
 ```
 
-`variable` can be `byte`, `int`, `long`  
-`number_of_bits` and integer <= 32  
+`variable` can be `byte`, `int`, `long`
+`number_of_bits` and integer <= 32
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 int a = 5;        // binary: 0000000000000101
 int b = a << 3;   // binary: 0000000000101000, or 40 in decimal
 int c = b >> 3;   // binary: 0000000000000101, or back to 5 like we started with
@@ -3410,7 +4135,7 @@ x-- ;   // decrement x by one and returns the old value of x
 where `x` is an integer or long (possibly unsigned)
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 x = 2;
 y = ++x;      // x now contains 3, y contains 3
 y = x--;      // x contains 2 again, y still contains 3
@@ -3433,11 +4158,11 @@ x *= y;   // equivalent to the expression x = x * y;
 x /= y;   // equivalent to the expression x = x / y;
 ```
 
-`x` can be any variable type  
+`x` can be any variable type
 `y` can be any variable type or constant
 
 ```C++
-EXAMPLE USAGE
+// EXAMPLE USAGE
 x = 2;
 x += 4;      // x now contains 6
 x -= 3;      // x now contains 3
@@ -3451,8 +4176,8 @@ The compound bitwise AND operator (&=) is often used with a variable and a const
 
 `x &= y;   // equivalent to x = x & y;`
 
-`x` can be a char, int or long variable  
-`y` can be an integer constant, char, int, or long  
+`x` can be a char, int or long variable
+`y` can be an integer constant, char, int, or long
 
 ```
    0  0  1  1    operand1
@@ -3460,10 +4185,10 @@ The compound bitwise AND operator (&=) is often used with a variable and a const
    ----------
    0  0  0  1    (operand1 & operand2) - returned result
 ```
-Bits that are "bitwise ANDed" with 0 are cleared to 0 so, if myByte is a byte variable,  
-`myByte & B00000000 = 0;`  
+Bits that are "bitwise ANDed" with 0 are cleared to 0 so, if myByte is a byte variable,
+`myByte & B00000000 = 0;`
 
-Bits that are "bitwise ANDed" with 1 are unchanged so,  
+Bits that are "bitwise ANDed" with 1 are unchanged so,
 `myByte & B11111111 = myByte;`
 
 **Note:** because we are dealing with bits in a bitwise operator - it is convenient to use the binary formatter with constants. The numbers are still the same value in other representations, they are just not as easy to understand. Also, B00000000 is shown for clarity, but zero in any number format is zero (hmmm something philosophical there?)
@@ -3471,7 +4196,7 @@ Bits that are "bitwise ANDed" with 1 are unchanged so,
 Consequently - to clear (set to zero) bits 0 & 1 of a variable, while leaving the rest of the variable unchanged, use the compound bitwise AND operator (&=) with the constant B11111100
 
 ```
-   1  0  1  0  1  0  1  0    variable  
+   1  0  1  0  1  0  1  0    variable
    1  1  1  1  1  1  0  0    mask
    ----------------------
    1  0  1  0  1  0  0  0
@@ -3491,8 +4216,8 @@ Here is the same representation with the variable's bits replaced with the symbo
                      bits cleared
 ```
 
-So if:  
-`myByte =  10101010;`  
+So if:
+`myByte =  10101010;`
 `myByte &= B1111100 == B10101000;`
 
 
@@ -3504,8 +4229,8 @@ The compound bitwise OR operator (|=) is often used with a variable and a consta
 SYNTAX
 x |= y;   // equivalent to x = x | y;
 ```
-`x` can be a char, int or long variable  
-`y` can be an integer constant or char, int or long  
+`x` can be a char, int or long variable
+`y` can be an integer constant or char, int or long
 
 ```
    0  0  1  1    operand1
@@ -3513,10 +4238,10 @@ x |= y;   // equivalent to x = x | y;
    ----------
    0  1  1  1    (operand1 | operand2) - returned result
 ```
-Bits that are "bitwise ORed" with 0 are unchanged, so if myByte is a byte variable,  
+Bits that are "bitwise ORed" with 0 are unchanged, so if myByte is a byte variable,
 `myByte | B00000000 = myByte;`
 
-Bits that are "bitwise ORed" with 1 are set to 1 so:  
+Bits that are "bitwise ORed" with 1 are set to 1 so:
 `myByte | B11111111 = B11111111;`
 
 Consequently - to set bits 0 & 1 of a variable, while leaving the rest of the variable unchanged, use the compound bitwise OR operator (|=) with the constant B00000011
@@ -3540,9 +4265,9 @@ Here is the same representation with the variables bits replaced with the symbol
  variable unchanged
                      bits set
 ```
-So if:  
-`myByte =  B10101010;`  
-`myByte |= B00000011 == B10101011;`  
+So if:
+`myByte =  B10101010;`
+`myByte |= B00000011 == B10101011;`
 
 
 
@@ -3581,7 +4306,7 @@ String(val)
 String(val, base)
 ```
 
-Parameters:  
+Parameters:
 
   * val: a variable to format as a String - string, char, byte, int, long, unsigned int, unsigned long
   * base (optional) - the base in which to format an integral value
@@ -3642,19 +4367,19 @@ Returns:
 
 ### concat()
 
-Combines, or *concatenates* two strings into one new String. The second string is appended to the first, and the result is placed in a new String.
+Combines, or *concatenates* two strings into one string. The second string is appended to the first, and the result is placed in the original string.
 
 ```
 SYNTAX:
 
-string.concat(string, string2)
+string.concat(string2)
 ```
 
 Parameters:
 
   * string, string2: variables of type String
 
-Returns: new String that is the combination of the original two Strings
+Returns: None
 
 ### endsWith()
 
@@ -3795,11 +4520,11 @@ string.replace(substring1, substring2)
 
 Parameters:
 
-  * string: a variable of type String
-  * substring1: another variable of type String
-  * substring2: another variable of type String
+  * string: the string which will be modified - a variable of type String
+  * substring1: searched for - another variable of type String (single or multi-character), char or const char (single character only)
+  * substring2: replaced with - another variable of type String (signle or multi-character), char or const char (single character only)
 
-Returns: another String containing the new string with replaced characters.
+Returns: None
 
 ### reserve()
 
@@ -3981,7 +4706,7 @@ Returns: None
 
 
 Variables
-========
+=====
 
 Constants
 ----
@@ -4201,12 +4926,12 @@ Possibilities for declaring strings:
   * Initialize the array with an explicit size and string constant, Str5
   * Initialize the array, leaving extra space for a larger string, Str6
 
-*Null termination:*  
+*Null termination:*
 Generally, strings are terminated with a null character (ASCII code 0). This allows functions (like Serial.print()) to tell where the end of a string is. Otherwise, they would continue reading subsequent bytes of memory that aren't actually part of the string.
 This means that your string needs to have space for one more character than the text you want it to contain. That is why Str2 and Str5 need to be eight characters, even though "arduino" is only seven - the last position is automatically filled with a null character. Str4 will be automatically sized to eight characters, one for the extra null. In Str3, we've explicitly included the null character (written '\0') ourselves.
 Note that it's possible to have a string without a final null character (e.g. if you had specified the length of Str2 as seven instead of eight). This will break most functions that use strings, so you shouldn't do it intentionally. If you notice something behaving strangely (operating on characters not in the string), however, this could be the problem.
 
-*Single quotes or double quotes?*  
+*Single quotes or double quotes?*
 Strings are always defined inside double quotes ("Abc") and characters are always defined inside single quotes('A').
 
 Wrapping long strings
@@ -4218,7 +4943,7 @@ char myString[] = "This is the first line"
 " etcetera";
 ```
 
-*Arrays of strings:*  
+*Arrays of strings:*
 It is often convenient, when working with large amounts of text, such as a project with an LCD display, to setup an array of strings. Because strings themselves are arrays, this is in actually an example of a two-dimensional array.
 In the code below, the asterisk after the datatype char "char*" indicates that this is an array of "pointers". All array names are actually pointers, so this is required to make an array of arrays. Pointers are one of the more esoteric parts of C for beginners to understand, but it isn't necessary to understand pointers in detail to use them effectively here.
 
@@ -4226,18 +4951,19 @@ In the code below, the asterisk after the datatype char "char*" indicates that t
 ```cpp
 //EXAMPLE
 
-char* myStrings[]={"This is string 1", "This is string 2", "This is string 3",
-"This is string 4", "This is string 5","This is string 6"};
+char* myStrings[] = {"This is string 1", "This is string 2",
+"This is string 3", "This is string 4", "This is string 5",
+"This is string 6"};
 
 void setup(){
-Serial.begin(9600);
+  Serial.begin(9600);
 }
 
 void loop(){
-for (int i = 0; i < 6; i++){
-   Serial.println(myStrings[i]);
-   delay(500);
-   }
+  for (int i = 0; i < 6; i++) {
+    Serial.println(myStrings[i]);
+    delay(500);
+  }
 }
 
 ```
@@ -4250,7 +4976,7 @@ More info can be found [here.](http://docs.spark.io/#/firmware/language-syntax-s
 
 An array is a collection of variables that are accessed with an index number.
 
-*Creating (Declaring) an Array:*  
+*Creating (Declaring) an Array:*
 All of the methods below are valid ways to create (declare) an array.
 
 ```cpp
@@ -4265,32 +4991,32 @@ You can declare an array without initializing it as in myInts.
 In myPins we declare an array without explicitly choosing a size. The compiler counts the elements and creates an array of the appropriate size.
 Finally you can both initialize and size your array, as in mySensVals. Note that when declaring an array of type char, one more element than your initialization is required, to hold the required null character.
 
-*Accessing an Array:*  
+*Accessing an Array:*
 Arrays are zero indexed, that is, referring to the array initialization above, the first element of the array is at index 0, hence
 
 `mySensVals[0] == 2, mySensVals[1] == 4`, and so forth.
-It also means that in an array with ten elements, index nine is the last element. Hence:  
+It also means that in an array with ten elements, index nine is the last element. Hence:
 ```cpp
-int myArray[10]={9,3,2,4,3,2,7,8,9,11};
-     // myArray[9]    contains 11
-     // myArray[10]   is invalid and contains random information (other memory address)
+int myArray[10] = {9,3,2,4,3,2,7,8,9,11};
+//  myArray[9]    contains 11
+//  myArray[10]   is invalid and contains random information (other memory address)
 ```
 
 For this reason you should be careful in accessing arrays. Accessing past the end of an array (using an index number greater than your declared array size - 1) is reading from memory that is in use for other purposes. Reading from these locations is probably not going to do much except yield invalid data. Writing to random memory locations is definitely a bad idea and can often lead to unhappy results such as crashes or program malfunction. This can also be a difficult bug to track down.
 Unlike BASIC or JAVA, the C compiler does no checking to see if array access is within legal bounds of the array size that you have declared.
 
-*To assign a value to an array:*  
+*To assign a value to an array:*
 `mySensVals[0] = 10;`
 
-*To retrieve a value from an array:*  
+*To retrieve a value from an array:*
 `x = mySensVals[4];`
 
-*Arrays and FOR Loops:*  
-Arrays are often manipulated inside for loops, where the loop counter is used as the index for each array element. For example, to print the elements of an array over the serial port, you could do something like this:
+*Arrays and FOR Loops:*
+Arrays are often manipulated inside `for` loops, where the loop counter is used as the index for each array element. To print the elements of an array over the serial port, you could do something like the following code example.  Take special note to a MACRO called `arraySize()` which is used to determine the number of elements in `myPins`.  In this case, arraySize() returns 5, which causes our `for` loop to terminate after 5 iterations.  Also note that `arraySize()` will not return the correct answer if passed a pointer to an array.
 
 ```cpp
-int i;
-for (i = 0; i < 5; i = i + 1) {
+int myPins[] = {2, 4, 8, 3, 6};
+for (int i = 0; i < arraySize(myPins); i++) {
   Serial.println(myPins[i]);
 }
 ```
